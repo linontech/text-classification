@@ -10,7 +10,7 @@ evaluation:
   - IMDB (Large Movie Review Dataset) from "Learning Word Vectors for Sentiment Analysis", Maas-EtAl:2011:ACL-HLT2011 
 - task1: a positive/negative sentiment classification of titles in the digital forum .
 - task2: similarity calculations between paragraph vector and a label vector.
-- task3: 300,000 documents and 100 categories, from "Efficient Vector Representation for Documents through Corruption"(Doc2vecC)
+- task3: 300,000 documents and 100 categories, from Minmin, 2017 "Efficient Vector Representation for Documents through Corruption"(Doc2vecC)
 
 requirements:
 
