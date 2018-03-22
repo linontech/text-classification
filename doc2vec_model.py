@@ -20,11 +20,11 @@ class doc2vec_model:
                  document_size,
                  vocabulary_size,
                  num_of_steps_per_epoch,
+                 embedding_size_w,
+                 embedding_size_d,
                  batch_size=32,
                  window_size=5,
-                 num_neg_samples=10,
-                 embedding_size_w=200,
-                 embedding_size_d=200,
+                 num_neg_samples=64,
                  learning_rate=0.01,
                  n_epochs=20,
                  eval_every_epochs=10,
@@ -62,13 +62,14 @@ class doc2vec_model:
 
         self.train_dataset = tf.placeholder(tf.int32, shape=[self.batch_size, 1])
         self.train_labels = tf.placeholder(tf.int32, shape=[self.batch_size, 1])
+        self.global_step = tf.Variable(0, name="global_step", trainable=False, dtype=tf.int32)
 
         doc_embeddings = tf.Variable(  # 初始化embedding参数在 [-1,1] 之间的随机数
             tf.random_uniform([self.document_size, self.embedding_size_d], -1.0, 1.0), name='doc_embeddings',
             dtype=tf.float32)
 
         # 初始化weights参数为 mean=0, stddev=1/sqrt(embedding_size_d)  的正态分布（高斯分布）
-        # 为什么这里初始化权重矩阵时不像doc_embeddings一样用均匀分布（uniform distribution）？ 。。
+        # 为什么这里初始化权重矩阵时不像doc_embeddings一样用均匀分布（uniform distribution）？
         weights = tf.Variable(
             tf.truncated_normal([self.document_size, self.embedding_size_d],
                                 stddev=1.0 / math.sqrt(self.embedding_size_d)), name='weights', dtype=tf.float32)
@@ -87,7 +88,11 @@ class doc2vec_model:
                            inputs=embed_d,
                            num_sampled=self.num_neg_samples,
                            num_classes=self.document_size), name='loss')
+        self.optimizer = tf.train.AdamOptimizer(self.lr).minimize(self.loss, global_step=self.global_step)
 
+        # optimizer = tf.train.AdamOptimizer(self.lr)
+        # grads_and_vars = optimizer.compute_gradients(self.loss)
+        # self.train_op = optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
         # normalized 归一化（将要处理的数据限制在一定的范围之内）
         # 归一化的目的是是没有可比性的数据，变得有可比性，同时又保持两个数据之间的相对关系，比如在作图的时候。
         # 在机器学习算法的预处理阶段，归一化是一个重要步骤。例如在训练 svm 等线性模型时。一般的，推荐将每个属性缩放
@@ -96,11 +101,17 @@ class doc2vec_model:
         self.normalized_doc_embeddings = tf.div(doc_embeddings,
                                                 tf.sqrt(tf.reduce_sum(tf.square(doc_embeddings), 1, keep_dims=True)),
                                                 name='doc_embeddings_norm')
+        self.lr = tf.train.exponential_decay(self.learning_rate,
+                                             global_step=self.global_step,
+                                             decay_steps=self.eval_every_epochs * self.num_of_steps_per_epoch,
+                                             decay_rate=0.96,
+                                             staircase=True)
 
     def init_pvdm(self, average=0):
 
         self.train_dataset = tf.placeholder(tf.int32, shape=[self.batch_size, self.window_size])
         self.train_labels = tf.placeholder(tf.int32, shape=[self.batch_size, 1])
+        self.global_step = tf.Variable(0, name="global_step", trainable=False, dtype=tf.int32)
 
         word_embeddings = tf.Variable(  # 初始化embedding参数
             tf.random_uniform([self.vocabulary_size, self.embedding_size_w], -1.0, 1.0), name='word_embeddings',
@@ -137,6 +148,9 @@ class doc2vec_model:
                            inputs=embed,
                            num_sampled=self.num_neg_samples,
                            num_classes=self.vocabulary_size), name='loss')
+        self.optimizer = tf.train.AdamOptimizer(self.lr).minimize(self.loss, global_step=self.global_step)
+        # grads_and_vars = optimizer.compute_gradients(self.loss)
+        # self.train_op = optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
 
         self.normalized_word_embeddings = tf.div(word_embeddings,
                                                  tf.sqrt(tf.reduce_sum(tf.square(word_embeddings), 1, keep_dims=True)),
@@ -144,6 +158,12 @@ class doc2vec_model:
         self.normalized_doc_embeddings = tf.div(doc_embeddings,
                                                 tf.sqrt(tf.reduce_sum(tf.square(doc_embeddings), 1, keep_dims=True)),
                                                 name='doc_embeddings_norm')
+
+        self.lr = tf.train.exponential_decay(self.learning_rate,
+                                             global_step=self.global_step,
+                                             decay_steps=self.eval_every_epochs * self.num_of_steps_per_epoch,
+                                             decay_rate=0.96,
+                                             staircase=True)
 
     def infer_vector_pvdm(self,
                           checkpoint_dir,
@@ -157,24 +177,25 @@ class doc2vec_model:
         """
         checkpoint_file = tf.train.latest_checkpoint(checkpoint_dir)
         logging.critical('Loaded the trained model: {}'.format(checkpoint_file))
-        graph = tf.Graph()
-        with graph.as_default():
+        restore_graph = tf.Graph()
+        with restore_graph.as_default():
             saver = tf.train.import_meta_graph("{}.meta".format(checkpoint_file))
             session_conf = tf.ConfigProto(allow_soft_placement=True,
                                           log_device_placement=False,
                                           gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.3))
 
-        with tf.Session(config=session_conf, graph=graph) as sess:
-            saver.restore(sess, checkpoint_file)
-            get_word_embeddings, get_doc_embeddings = graph.get_operation_by_name('word_embeddings').outputs[0], \
-                                                      graph.get_operation_by_name('doc_embeddings').outputs[0]
-            get_weights = graph.get_operation_by_name('weights').outputs[0]
-            get_biases = graph.get_operation_by_name('biases').outputs[0]
+            with tf.Session(config=session_conf, graph=restore_graph) as sess:  # restore parameters
+                saver.restore(sess, checkpoint_file)
+                get_word_embeddings, get_doc_embeddings = \
+                restore_graph.get_operation_by_name('word_embeddings').outputs[0], \
+                restore_graph.get_operation_by_name('doc_embeddings').outputs[0]
+                get_weights = restore_graph.get_operation_by_name('weights').outputs[0]
+                get_biases = restore_graph.get_operation_by_name('biases').outputs[0]
 
-            old_word_embeddings, old_doc_embeddings, old_weights, old_biases = sess.run(
-                [get_word_embeddings, get_doc_embeddings, get_weights, get_biases])
+                old_word_embeddings, old_doc_embeddings, old_weights, old_biases = sess.run(
+                    [get_word_embeddings, get_doc_embeddings, get_weights, get_biases])
 
-            new_doc_start_index = old_doc_embeddings.shape[0]
+                new_doc_start_index = old_doc_embeddings.shape[0]
 
         # if sess is not None:
         #     print('Close interactive session pvdm')
@@ -184,19 +205,24 @@ class doc2vec_model:
         new_graph = tf.Graph()
         with new_graph.as_default():
 
-            global_step = tf.Variable(0, name="global_step", trainable=False)
             self.predict_dataset = tf.placeholder(tf.int32, shape=[self.batch_size, self.window_size])
             self.predict_labels = tf.placeholder(tf.int32, shape=[self.batch_size, 1])
+            self.global_step = tf.Variable(0, name="global_step", trainable=False, dtype=tf.int32)
             new_doc_embeddings = np.random.uniform(-1, 1, [self.document_size, self.embedding_size_d])
             concat_doc_embeddings_nparray = np.concatenate((old_doc_embeddings, new_doc_embeddings), axis=0)
             concat_doc_embeddings = tf.Variable(
                 tf.zeros([concat_doc_embeddings_nparray.shape[0], concat_doc_embeddings_nparray.shape[1]]),
-                name='doc_embeddings')
+                name='doc_embeddings', dtype=tf.float32)
             word_embeddings = tf.Variable(tf.zeros([old_word_embeddings.shape[0], old_word_embeddings.shape[1]]),
-                                          trainable=False, name='word_embeddings')
+                                          trainable=False, name='word_embeddings', dtype=tf.float32)
             weights = tf.Variable(tf.zeros([old_weights.shape[0], old_weights.shape[1]]), trainable=False,
-                                  name='weights')
-            biases = tf.Variable(tf.zeros([old_biases.shape[0]]), trainable=False, name='biases')
+                                  name='weights', dtype=tf.float32)
+            biases = tf.Variable(tf.zeros([old_biases.shape[0]]), trainable=False, name='biases', dtype=tf.float32)
+
+            assign_doc_embeddings = tf.assign(concat_doc_embeddings, concat_doc_embeddings_nparray)
+            assign_word_embeddings = tf.assign(word_embeddings, old_word_embeddings)
+            assign_weights = tf.assign(weights, old_weights)
+            assign_biases = tf.assign(biases, old_biases)
 
             embed = []
             embed_d = tf.nn.embedding_lookup(concat_doc_embeddings, new_doc_start_index + self.predict_dataset[:, 0])
@@ -215,27 +241,27 @@ class doc2vec_model:
                                num_sampled=self.num_neg_samples,
                                num_classes=self.vocabulary_size), name='loss')
 
-            lr = tf.train.exponential_decay(self.learning_rate,
-                                            global_step=global_step,
-                                            decay_steps=self.eval_every_epochs * self.num_of_steps_per_epoch,
-                                            decay_rate=0.96,
-                                            staircase=True)
+            self.lr = tf.train.exponential_decay(self.learning_rate,
+                                                 global_step=self.global_step,
+                                                 decay_steps=self.eval_every_epochs * self.num_of_steps_per_epoch,
+                                                 decay_rate=0.96,
+                                                 staircase=True)
 
-            self.optimizer = tf.train.GradientDescentOptimizer(lr).minimize(self.loss, global_step=global_step)
+            self.optimizer = tf.train.GradientDescentOptimizer(self.lr).minimize(self.loss,
+                                                                                 global_step=self.global_step)
 
             norm_w = tf.sqrt(tf.reduce_sum(tf.square(word_embeddings), 1, keep_dims=True), name='word_embeddings')
             self.normalized_word_embeddings = tf.div(word_embeddings, norm_w, name='word_embeddings_norm')
 
             norm_d = tf.sqrt(tf.reduce_sum(tf.square(new_doc_embeddings), 1, keep_dims=True), name='doc_embeddings')
             self.normalized_doc_embeddings = tf.div(new_doc_embeddings, norm_d, name='doc_embeddings_norm')
-
-            logging.critical('Following is kind of retrained things, since you are inferring. ')
+            init = tf.global_variables_initializer()
             saver = tf.train.Saver(tf.global_variables())
 
         #
         session_conf = tf.ConfigProto(allow_soft_placement=True,
-                                      log_device_placement=True,
-                                      gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.9))
+                                      log_device_placement=False,
+                                      gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5))
         session_conf.gpu_options.allow_growth = True
 
         out_dir = os.path.abspath(
@@ -252,7 +278,7 @@ class doc2vec_model:
                 self.predict_dataset: x_batch,
                 self.predict_labels: y_batch
             }
-            _, step, loss_train = sess.run([self.optimizer, global_step, self.loss], feed_dict=feed_dict)
+            _, loss_train = sess.run([self.optimizer, self.loss], feed_dict=feed_dict)
 
             return loss_train
 
@@ -260,16 +286,15 @@ class doc2vec_model:
         current_epoch = 1
         total_train_loss = 0
         tolerance = self.tolerance
+        logging.critical('Following is kind of retrained things, since you are inferring. ')
         with tf.Session(config=session_conf, graph=new_graph) as sess:
 
-            sess.run(tf.global_variables_initializer())  # initialize variables
             logging.info("assign old variables w, b, docvectors, wordvectors")
-            assign_doc_embeddings = tf.assign(concat_doc_embeddings, concat_doc_embeddings_nparray)
-            assign_word_embeddings = tf.assign(word_embeddings, old_word_embeddings)
-            assign_weights = tf.assign(weights, old_weights)
-            assign_biases = tf.assign(biases, old_biases)
-            sess.run([assign_biases, assign_weights, assign_doc_embeddings, assign_word_embeddings])
-
+            sess.run(init)  # initialize variables
+            sess.run(assign_biases)
+            sess.run(assign_weights)
+            sess.run(assign_doc_embeddings)
+            sess.run(assign_word_embeddings)
             for train_batch in new_train_batches:
                 x_train_batch, y_train_batch = zip(*train_batch)
                 loss = train_step(x_train_batch, y_train_batch)
@@ -286,7 +311,7 @@ class doc2vec_model:
                     else:
                         tolerance -= 1
                         logging.critical(
-                            '{} tolerance left, avg train loss: {} at epoch {}.'.format(tolerance,
+                            '{} tolerance left, best avg train loss: {} at epoch {}.'.format(tolerance,
                                                                                         best_train_avg_loss,
                                                                                         current_epoch))
 
@@ -354,42 +379,49 @@ class doc2vec_model:
         """
         checkpoint_file = tf.train.latest_checkpoint(checkpoint_dir)
         logging.critical('Loaded the trained model: {}'.format(checkpoint_file))
-        graph = tf.Graph()
-        with graph.as_default():
+        restore_graph = tf.Graph()
+        with restore_graph.as_default():
             session_conf = tf.ConfigProto(allow_soft_placement=True,
-                                          log_device_placement=True)
-        with tf.Session(config=session_conf).as_default() as sess:
+                                          log_device_placement=False)
             saver = tf.train.import_meta_graph("{}.meta".format(checkpoint_file))
-            saver.restore(sess, checkpoint_file)
 
-            get_doc_embeddings = graph.get_operation_by_name('doc_embeddings').outputs[0]
-            get_weights = graph.get_operation_by_name('weights').outputs[0]
-            get_biases = graph.get_operation_by_name('biases').outputs[0]
+            with tf.Session(config=session_conf, graph=restore_graph).as_default() as sess:
+                saver.restore(sess, checkpoint_file)
 
-            old_doc_embeddings, old_weights, old_biases = sess.run([get_doc_embeddings, get_weights, get_biases])
+                get_doc_embeddings = restore_graph.get_operation_by_name('doc_embeddings').outputs[0]
+                get_weights = restore_graph.get_operation_by_name('weights').outputs[0]
+                get_biases = restore_graph.get_operation_by_name('biases').outputs[0]
+
+                old_doc_embeddings, old_weights, old_biases = sess.run([get_doc_embeddings, get_weights, get_biases])
 
         new_doc_start_index = old_doc_embeddings.shape[0]
 
+        del restore_graph
         if sess is not None:
             print('Close interactive session pvdbow')
             sess.close()
 
-        graph = tf.Graph()
-        with graph.as_default():
+        new_graph = tf.Graph()
+        with new_graph.as_default():
 
-            global_step = tf.Variable(0, name="global_step", trainable=False)
             self.predict_dataset = tf.placeholder(tf.int32, shape=[self.batch_size, 1])
             self.predict_labels = tf.placeholder(tf.int32, shape=[self.batch_size, 1])
+            self.global_step = tf.Variable(0, name="global_step", trainable=False, dtype=tf.int32)
 
-            weights = tf.Variable(old_weights, trainable=False)
-            biases = tf.Variable(old_biases, trainable=False)
+            weights = tf.Variable(tf.zeros([old_weights.shape[0], old_weights.shape[1]]), trainable=False,
+                                  name='weights', dtype=tf.float32)
+            biases = tf.Variable(tf.zeros([old_biases.shape[0]]), trainable=False, name='biases', dtype=tf.float32)
 
             new_doc_embeddings = np.random.uniform(-1, 1, [self.document_size, self.embedding_size_d])
             concat_doc_embeddings_nparray = np.concatenate((old_doc_embeddings, new_doc_embeddings), axis=0)
             concat_doc_embeddings = tf.Variable(
                 tf.zeros([concat_doc_embeddings_nparray.shape[0], concat_doc_embeddings_nparray.shape[1]]),
-                name='doc_embeddings')
+                name='doc_embeddings', dtype=tf.float32)
             embed_d = tf.nn.embedding_lookup(concat_doc_embeddings, self.predict_dataset[:, 0])
+
+            assign_doc_embeddings = tf.assign(concat_doc_embeddings, concat_doc_embeddings_nparray)
+            assign_weights = tf.assign(weights, old_weights)
+            assign_biases = tf.assign(biases, old_biases)
 
             self.loss = tf.reduce_mean(
                 tf.nn.nce_loss(weights=weights,
@@ -399,21 +431,22 @@ class doc2vec_model:
                                num_sampled=self.num_neg_samples,
                                num_classes=self.vocabulary_size), name='loss')
 
-            lr = tf.train.exponential_decay(self.learning_rate,
-                                            global_step=global_step,
-                                            decay_steps=self.eval_every_epochs * self.num_of_steps_per_epoch,
-                                            decay_rate=0.96,
-                                            staircase=True)
+            self.lr = tf.train.exponential_decay(self.learning_rate,
+                                                 global_step=self.global_step,
+                                                 decay_steps=self.eval_every_epochs * self.num_of_steps_per_epoch,
+                                                 decay_rate=0.96,
+                                                 staircase=True)
 
-            self.optimizer = tf.train.GradientDescentOptimizer(lr).minimize(self.loss, global_step=global_step)
+            self.optimizer = tf.train.GradientDescentOptimizer(self.lr).minimize(self.loss,
+                                                                                 global_step=self.global_step)
             self.normalized_doc_embeddings = tf.div(new_doc_embeddings, tf.sqrt(
                 tf.reduce_sum(tf.square(new_doc_embeddings), 1, keep_dims=True)), name='doc_embeddings_norm')
+            init = tf.global_variables_initializer()
             saver = tf.train.Saver(tf.global_variables())
 
-            logging.critical('Following is kind of retrained things, since you are inferring. ')
             session_conf = tf.ConfigProto(allow_soft_placement=True,
-                                          log_device_placement=True,
-                                          gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.9))
+                                          log_device_placement=False,
+                                          gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5))
             session_conf.gpu_options.allow_growth = True
 
         out_dir = os.path.abspath(
@@ -429,7 +462,7 @@ class doc2vec_model:
                 self.predict_dataset: x_batch,
                 self.predict_labels: y_batch
             }
-            _, step, loss_train = sess.run([self.optimizer, global_step, self.loss], feed_dict=feed_dict)
+            _, loss_train = sess.run([self.optimizer, self.loss], feed_dict=feed_dict)
 
             return loss_train
 
@@ -437,14 +470,14 @@ class doc2vec_model:
         current_epoch = 1
         total_train_loss = 0
         tolerance = self.tolerance
-        with tf.Session(config=session_conf).as_default() as sess:
+        logging.critical('Following is kind of retrained things, since you are inferring. ')
+        with tf.Session(config=session_conf, graph=new_graph).as_default() as sess:
 
-            sess.run(tf.global_variables_initializer())  # initialize variables
+            sess.run(init)  # initialize variables
             logging.info("assign old variables w, b, docvectors")
-            assign_doc_embeddings = tf.assign(concat_doc_embeddings, concat_doc_embeddings_nparray)
-            assign_weights = tf.assign(weights, old_weights)
-            assign_biases = tf.assign(biases, old_biases)
-            sess.run([assign_biases, assign_weights, assign_doc_embeddings])
+            sess.run(assign_biases)
+            sess.run(assign_weights)
+            sess.run(assign_doc_embeddings)
 
             for train_batch in new_train_batches:
                 x_train_batch, y_train_batch = zip(*train_batch)
@@ -462,7 +495,7 @@ class doc2vec_model:
                     else:
                         tolerance -= 1
                         logging.critical(
-                            '{} tolerance left, avg train loss: {} at epoch {}.'.format(tolerance,
+                            '{} tolerance left, best avg train loss: {} at epoch {}.'.format(tolerance,
                                                                                         best_train_avg_loss,
                                                                                         current_epoch))
 

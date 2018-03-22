@@ -16,7 +16,7 @@ jieba.load_userdict('dataset/digital_selfdict.txt')
 LabelSen = namedtuple('LabeledSen', ['sentence_index', 'word_indexes'])
 
 
-def load_data_label(filepath, window_size):
+def load_data_label(filepath):
 
     file = open(filepath, encoding='utf-8')
     lines = file.read().split('\n')
@@ -27,12 +27,11 @@ def load_data_label(filepath, window_size):
         label = line.split('\t')[1]
         text = accept_sentence(text)
         text = jieba.lcut(''.join(text), HMM=False)
-        if len(text) >= window_size:
-            texts.append(' '.join(text))
-            if label == '中立':
-                labels.append(0)
-            elif label == '负面':
-                labels.append(1)
+        texts.append(' '.join(text))
+        if label == '中立':
+            labels.append(0)
+        elif label == '负面':
+            labels.append(1)
 
     return texts, labels
 
@@ -134,10 +133,10 @@ def build_vocabulary(input_data, stop_words_file='dataset/stopwords.txt', k=100,
     return word2count, word2index, index2word
 
 
-def generate_texts2indexes(input_data, word2index, window_size):
+def generate_texts2indexes(input_data, word2index):
     """
     Mikolov 2014 ：如果句子的长度小于window_size，那么剩下的单词用__NULL__标签代替，且放在前面。
-    num_skip: 一个窗口最多采样多少样本
+    num_skip: 一个窗口最多采样多少样本; prevent overfitting issue
     '__NULL__' 表示句子还不够一个window_size那么长
     :param input_data: listOfText，已经分词
     :param labels: 对应的标签
@@ -147,15 +146,14 @@ def generate_texts2indexes(input_data, word2index, window_size):
     sentence_index = 0
     for text in input_data:
         # text = accept_sentence(text)
-        list_of_words = text.split(' ')
-        if len(list_of_words) >= window_size:
-            # yield LabelSen(sentence_index, words2ids(word2index, text))
-            texts2indexes_list.append(LabelSen(sentence_index, words2ids(word2index, text)))
-            sentence_index += 1
+        # yield LabelSen(sentence_index, words2ids(word2index, text))
+        texts2indexes_list.append(LabelSen(sentence_index, words2ids(word2index, text)))
+        sentence_index += 1
     return texts2indexes_list
 
 def generate_pvdm_batches(LabeledSentences, n_epochs , batch_size, window_size, shuffle=True):
     """
+    add num_skip variables to limit samples generate from one window
     :param batch_size:
     :param window_size:
     :param LabeledSentences:
@@ -228,7 +226,6 @@ def generate_pvdbow_batches(LabeledSentences, n_epochs, batch_size, window_size,
     data = np.array(sample_label_s)
     data_size = len(sample_label_s)
     num_batches_per_epoch = int(data_size / batch_size) + 1
-
     batches=[]
     for epoch in range(n_epochs):# batch_iter
         if shuffle:
@@ -253,7 +250,7 @@ def load_data(filepath, sample_file_path, data_size=350000):
         for line in file:
             text = line.split('\t')[0].replace(' ', '').replace('\n', '')
             text = accept_sentence(text)
-            text = jieba.lcut(''.join(text), HMM=False)
+            text = jieba.lcut(''.join(text))
             yield ' '.join(text)
             sample_count+=1
 
@@ -263,20 +260,21 @@ def load_data(filepath, sample_file_path, data_size=350000):
     # random_nums = set(random.sample(range(44001245), data_size))
     # need to remember the sample
     try:
-        ixs = load_obj('dataset/ix_for_big_data.pkl')
+        ixs = load_obj('dataset/ix_for_big_data_' + str(data_size) + '.pkl')
         logging.critical('Indexes file found. ')
         create_new_indexes = False
     except:
         create_new_indexes = True
         logging.critical('No indexes file found. ')
 
+    thefile = open('dataset/the100000file.txt', 'w')
     with open(filepath, 'rb') as f:
         f.seek(0, 2)
         filesize = f.tell()
         if create_new_indexes:
             random_set = sorted(random.sample(range(filesize), data_size))
             logging.critical('saving indexes file. ')
-            save_obj(random_set, 'dataset/ix_for_big_data.pkl')
+            save_obj(random_set, 'dataset/ix_for_big_data_' + str(data_size) + '.pkl')
         else:
             random_set = ixs
 
@@ -287,11 +285,13 @@ def load_data(filepath, sample_file_path, data_size=350000):
             line = line.decode('utf-8')
             text = line.split('\t')[0].replace(' ', '').replace('\n', '')
             text = accept_sentence(text)
-            text = jieba.lcut(''.join(text), HMM=False)
+            text = ' '.join(jieba.lcut(''.join(text), HMM=False))
             # print (' '.join(text))
-            yield ' '.join(text)
+            thefile.write(text+'\n')
+            yield text
             # if i%50000==0:
             #     print (i)
+    thefile.close()
 
 def save_obj(obj, path):
     import pickle
