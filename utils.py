@@ -1,39 +1,20 @@
 # -*- coding: utf-8 -*-
 # @Author  : lzw
-import collections
+import logging
+import random
 import re
 from collections import namedtuple
 from datetime import datetime
-import logging
-import random
-import numpy as np
+
 import jieba
+import numpy as np
 
 random.seed(3)
 logging.getLogger().setLevel(logging.INFO)
-jieba.load_userdict('dataset/digital_selfdict.txt')
+jieba.load_userdict('dataset/digital forum comments/digital_selfdict.txt')
 
 LabelSen = namedtuple('LabeledSen', ['sentence_index', 'word_indexes'])
 
-
-def load_data_label(filepath):
-
-    file = open(filepath, encoding='utf-8')
-    lines = file.read().split('\n')
-    file.close()
-    texts, labels = [], []
-    for line in lines:
-        text = line.split('\t')[0]
-        label = line.split('\t')[1]
-        text = accept_sentence(text)
-        text = jieba.lcut(''.join(text), HMM=False)
-        texts.append(' '.join(text))
-        if label == '中立':
-            labels.append(0)
-        elif label == '负面':
-            labels.append(1)
-
-    return texts, labels
 
 def save_model(model, filename):
     import pickle
@@ -58,7 +39,6 @@ def Chinese_word_extraction(content_raw):
 
 def accept_sentence(sentnece):
     return Chinese_word_extraction(sentnece)
-
 # def accept_word(word):
 #     return
 
@@ -68,15 +48,18 @@ def words2ids(word2id, words):
         if id is None:  # 如果字典里面没有这个词的情况
             id = 0  # '__UNK__’ 的index
         return id
+
     x = list(map(word_to_id, words))
     return np.array(x)
+
 
 def ids2words(id2word, ids):
     def id_to_word(id):
         word = id2word.get(id)
         return word
+
     words = list(map(id_to_word, ids))
-    return words # list
+    return words  # list
 
 
 def build_vocabulary(input_data, stop_words_file='dataset/stopwords.txt', k=100, min_appear_freq=5, window_size=3):
@@ -89,7 +72,7 @@ def build_vocabulary(input_data, stop_words_file='dataset/stopwords.txt', k=100,
     :param min_appear_freq 单词最小出现次数，参数根据语料库大小需要调整
     :return: dict
     """
-    logging.critical(str(datetime.now()).replace(':', '-') + '  Start building vocabulary. ')
+    logging.info(str(datetime.now()).replace(':', '-') + '  Start building vocabulary. ')
     stop_words_file = open(stop_words_file, encoding='utf-8')
     stop_words = set(stop_words_file.read().split('\n'))
     stop_words_file.close()
@@ -99,8 +82,8 @@ def build_vocabulary(input_data, stop_words_file='dataset/stopwords.txt', k=100,
         list_of_words = accept_sentence(text)
         for word in list_of_words:
             if word in stop_words:
-                unk_count+=1 # 这里用出现的停用词个数当作近似的unk_count，避免建立vocab后还要重新遍历，
-            word2count[word] = word2count.get(word, 0) + 1 # 但是只把k_common中的停用词从词典中去掉
+                unk_count += 1  # 这里用出现的停用词个数当作近似的unk_count，避免建立vocab后还要重新遍历，
+            word2count[word] = word2count.get(word, 0) + 1  # 但是只把k_common中的停用词从词典中去掉
 
     sort_word2count = sorted(word2count.items(), key=lambda x: x[1], reverse=True)
 
@@ -114,7 +97,7 @@ def build_vocabulary(input_data, stop_words_file='dataset/stopwords.txt', k=100,
     word2count['UNK'] = unk_count
 
     index = 2
-    word2index = {'_UNK_':0, '_NULL_':1}
+    word2index = {'_UNK_': 0, '_NULL_': 1}
     remove_words = []
     for word, count in word2count.items():
         if count >= min_appear_freq:
@@ -127,8 +110,9 @@ def build_vocabulary(input_data, stop_words_file='dataset/stopwords.txt', k=100,
 
     index2word = dict(zip(word2index.values(), word2index.keys()))
     remove_words = remove_words + remove_sotp_words
-    # logging.critical('{} remove words: \n {}'.format(len(remove_words), str(remove_words)))
-    logging.critical(str(datetime.now()).replace(':', '-') + '  End building vocabulary. length of vocabulary: {}'.format(len(index2word)))
+    logging.info('{} remove words: \n {}'.format(len(remove_words), str(remove_words)))
+    logging.info(str(datetime.now()).replace(':', '-') + '  End building vocabulary. length of vocabulary: {}'.format(
+        len(index2word)))
 
     return word2count, word2index, index2word
 
@@ -142,7 +126,7 @@ def generate_texts2indexes(input_data, word2index):
     :param labels: 对应的标签
     :return: LabelDoc, [（编号，分词句子中词语index）]
     """
-    texts2indexes_list=[]
+    texts2indexes_list = []
     sentence_index = 0
     for text in input_data:
         # text = accept_sentence(text)
@@ -151,7 +135,8 @@ def generate_texts2indexes(input_data, word2index):
         sentence_index += 1
     return texts2indexes_list
 
-def generate_pvdm_batches(LabeledSentences, n_epochs , batch_size, window_size, shuffle=True):
+
+def generate_pvdm_batches(LabeledSentences, n_epochs, batch_size, window_size, shuffle=True):
     """
     add num_skip variables to limit samples generate from one window
     :param batch_size:
@@ -164,20 +149,21 @@ def generate_pvdm_batches(LabeledSentences, n_epochs , batch_size, window_size, 
     for LabeledSentence in LabeledSentences:
         indexes = LabeledSentence.word_indexes
         sen_len = len(indexes)
-        if sen_len < window_size:  # if len of sentence smaller than window_size
+        if sen_len < window_size:  # if len of sentence smaller than window_size prepad __null__ in the front
             null_words = np.array([1] * (window_size - sen_len))
             indexes = np.concatenate((null_words, indexes))
             sen_len = len(indexes)
             assert sen_len == window_size
         if sen_len == window_size:
-                # bad=True
-                poses = [0]
+            # bad=True
+            poses = [0]
         else:
             poses = range(0, sen_len - window_size + 1)
 
         for pos in poses:
-            sample_label_s.append([np.concatenate((np.array([LabeledSentence.sentence_index]), indexes[pos: pos + window_size-1])), \
-                                   indexes[pos + window_size - 1: pos + window_size]])
+            sample_label_s.append(
+                [np.concatenate((np.array([LabeledSentence.sentence_index]), indexes[pos: pos + window_size - 1])), \
+                 indexes[pos + window_size - 1: pos + window_size]])
 
             # if bad:
             #     print (indexes)
@@ -186,10 +172,10 @@ def generate_pvdm_batches(LabeledSentences, n_epochs , batch_size, window_size, 
 
     data = np.array(sample_label_s)
     data_size = len(sample_label_s)
-    num_batches_per_epoch = int(data_size / batch_size) + 1 # num_of_step_per_epoch
+    num_batches_per_epoch = int(data_size / batch_size) + 1  # num_of_step_per_epoch
 
     batches = []
-    for epoch in range(n_epochs): # batch_iter
+    for epoch in range(n_epochs):  # batch_iter
         if shuffle:
             shuffle_indices = np.random.permutation(np.arange(data_size))
             shuffled_data = data[shuffle_indices]
@@ -205,8 +191,8 @@ def generate_pvdm_batches(LabeledSentences, n_epochs , batch_size, window_size, 
             batches.append(shuffled_data[start_index:end_index])
     return batches
 
-def generate_pvdbow_batches(LabeledSentences, n_epochs, batch_size, window_size, shuffle=True):
 
+def generate_pvdbow_batches(LabeledSentences, n_epochs, batch_size, window_size, shuffle=True):
     sample_label_s = []
     for LabeledSentence in LabeledSentences:
         indexes = LabeledSentence.word_indexes
@@ -215,7 +201,7 @@ def generate_pvdbow_batches(LabeledSentences, n_epochs, batch_size, window_size,
             null_words = np.array([1] * (window_size - sen_len))
             indexes = np.concatenate((null_words, indexes))
             sen_len = len(indexes)
-            assert sen_len==window_size
+            assert sen_len == window_size
         if sen_len == window_size:
             poses = [0]
         else:
@@ -226,10 +212,10 @@ def generate_pvdbow_batches(LabeledSentences, n_epochs, batch_size, window_size,
     data = np.array(sample_label_s)
     data_size = len(sample_label_s)
     num_batches_per_epoch = int(data_size / batch_size) + 1
-    batches=[]
-    for epoch in range(n_epochs):# batch_iter
+    batches = []
+    for epoch in range(n_epochs):  # batch_iter
         if shuffle:
-            shuffle_indices = np.random.permutation(np.arange(data_size)) # memory error here
+            shuffle_indices = np.random.permutation(np.arange(data_size))  # memory error here
             shuffled_data = data[shuffle_indices]
         else:
             shuffled_data = data
@@ -243,8 +229,27 @@ def generate_pvdbow_batches(LabeledSentences, n_epochs, batch_size, window_size,
             batches.append(shuffled_data[start_index:end_index])
     return batches
 
-def load_data(filepath, sample_file_path, data_size=350000):
 
+def load_data_label(filepath):
+    file = open(filepath, encoding='utf-8')
+    lines = file.read().split('\n')
+    file.close()
+    texts, labels = [], []
+    for line in lines:
+        text = line.split('\t')[0]
+        label = line.split('\t')[1]
+        text = accept_sentence(text)
+        text = jieba.lcut(''.join(text), HMM=False)
+        texts.append(' '.join(text))
+        if label == '中立':
+            labels.append(0)
+        elif label == '负面':
+            labels.append(1)
+
+    return texts, labels
+
+
+def load_data(filepath, sample_file_path, data_size=350000):
     with open(sample_file_path, encoding='utf-8') as file:
         sample_count = 0
         for line in file:
@@ -252,7 +257,7 @@ def load_data(filepath, sample_file_path, data_size=350000):
             text = accept_sentence(text)
             text = jieba.lcut(''.join(text))
             yield ' '.join(text)
-            sample_count+=1
+            sample_count += 1
 
     assert sample_count == 10
     # random_sampler for big file which does not fit in memory
@@ -261,11 +266,11 @@ def load_data(filepath, sample_file_path, data_size=350000):
     # need to remember the sample
     try:
         ixs = load_obj('dataset/ix_for_big_data_' + str(data_size) + '.pkl')
-        logging.critical('Indexes file found. ')
+        logging.info('Indexes file found. ')
         create_new_indexes = False
     except:
         create_new_indexes = True
-        logging.critical('No indexes file found. ')
+        logging.info('No indexes file found. ')
 
     thefile = open('dataset/the100000file.txt', 'w')
     with open(filepath, 'rb') as f:
@@ -273,32 +278,66 @@ def load_data(filepath, sample_file_path, data_size=350000):
         filesize = f.tell()
         if create_new_indexes:
             random_set = sorted(random.sample(range(filesize), data_size))
-            logging.critical('saving indexes file. ')
+            logging.info('saving indexes file. ')
             save_obj(random_set, 'dataset/ix_for_big_data_' + str(data_size) + '.pkl')
         else:
             random_set = ixs
 
         for i in range(data_size):
             f.seek(random_set[i])
-            f.readline() # Skip current line (because we might be in the middle of a line)
+            f.readline()  # Skip current line (because we might be in the middle of a line)
             line = f.readline().rstrip()
             line = line.decode('utf-8')
             text = line.split('\t')[0].replace(' ', '').replace('\n', '')
             text = accept_sentence(text)
             text = ' '.join(jieba.lcut(''.join(text), HMM=False))
             # print (' '.join(text))
-            thefile.write(text+'\n')
+            thefile.write(text + '\n')
             yield text
             # if i%50000==0:
             #     print (i)
     thefile.close()
+
 
 def save_obj(obj, path):
     import pickle
     with open(path, 'wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
 
+
 def load_obj(path):
     import pickle
     with open(path, 'rb') as f:
         return pickle.load(f)
+
+
+def evaluate_analysis(x, y, y_pred, thresold, path):
+    """
+    :param x:
+    :param y:
+    :param y_pred:
+    :param thresold:
+    :param path: path of result out folder
+    :return:
+    """
+    # assert y.shape == y_pred.shape
+    logging.info('writing error analysis result to ' + path)
+    from sklearn.metrics import classification_report
+    y_predHat = [1 if i > thresold else 0 for i in y_pred]
+    classification_report(y, y_predHat)
+    f = open(path, 'w', encoding='utf-8')
+
+    tmp = []
+    f.write('ix\t' + 'real\t' + 'pred\t' + 'text\n')
+    for ix in range(len(y_pred)):
+        y_pred_single = 1 if y_pred[ix] > thresold  else 0
+        if y_pred_single != y[ix]:  # write error first
+            f.write(str(ix + 1) + '\t' + str(y[ix]) + '\t' +
+                    str(y_pred[ix]) + '\t' +  str(x[ix]) + '\n')
+        tmp.append(str(ix + 1) + '\t' + str(y[ix]) + '\t' +
+                   str(y_pred[ix]) + '\t' + str(x[ix]) + '\n')
+    f.write('-----------------------ALL RESULT------------------------')
+    for text in tmp:
+        f.write(text)
+
+    f.close()

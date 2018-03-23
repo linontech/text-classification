@@ -88,7 +88,7 @@ class lr_model:
             Init_Thetas.append(theta_init)
             local_labels = labels
 
-            logging.critical('start training a lr model with 0/1 labels')
+            logging.info('[LR] start training a lr model with 0/1 labels')
             init_theta = Init_Thetas[0]
             new_theta, final_cost = self.computeGradient(data, local_labels, init_theta)
             self.Thetas.append(new_theta)
@@ -114,7 +114,7 @@ class lr_model:
                 assert len(np.unique(local_labels)) == 2
                 assert len(local_labels) == len(labels)
 
-                logging.critical('start training a lr model with multiple labels')
+                logging.info('[LR] start training a lr model with multiple labels')
                 init_theta = Init_Thetas[eachClass]
                 new_theta, final_cost = self.computeGradient(data, local_labels, init_theta)
                 self.Thetas.append(new_theta)
@@ -135,7 +135,7 @@ class lr_model:
         elif self.normalization_mode == "l2" and self.llambda > 0:
             regularized_parameter = np.dot(self.llambda / (2 * self.m), np.sum(theta2 * theta2))
         elif self.normalization_mode != "l1" and self.normalization_mode != "l2" and self.llambda > 0:
-            logging.critical('错误指定正则化类型')
+            logging.info('[LR] 错误指定正则化类型')
             exit()
 
         Z = np.dot(data, theta)
@@ -226,9 +226,9 @@ class lr_model:
                     if tolerance > 0:
                         tolerance -= 1
                     else:
-                        logging.critical('--Early stop at Step {} , cost = {} . '.format(step, loss))
+                        logging.info('[LR] --Early stop at Step {} , cost = {} . '.format(step, loss))
                         return theta, loss
-                logging.critical('--Step {} , cost = {} . '.format(step, loss))
+                logging.info('[LR] --Step {} , cost = {} . '.format(step, loss))
                 last_loss = loss
                 step += 1
         return theta, loss

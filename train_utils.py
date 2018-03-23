@@ -14,7 +14,8 @@ import utils
 from doc2vec_model import doc2vec_model
 
 logging.getLogger().setLevel(logging.INFO)
-jieba.load_userdict('dataset/digital_selfdict.txt')
+jieba.load_userdict('dataset/digital forum comments/digital_selfdict.txt')
+
 
 def train(model_type,
           word2index,
@@ -28,6 +29,7 @@ def train(model_type,
           batch_size,
           n_epochs,
           eval_every_epochs,
+          num_neg_samples,
           learning_rate,
           eplison,
           tolerance,
@@ -43,12 +45,12 @@ def train(model_type,
         n_steps = num_of_batches_total
         sample_len = num_of_batches_total * batch_size
         num_of_steps_per_epoch = num_of_batches_total // n_epochs + 1
-        logging.critical('{} LabeledSentences_train sentences.'.format(document_size))
-        logging.critical('{} samples.'.format(sample_len))
-        logging.critical('{} steps to go. '.format(n_steps))
-        logging.critical('{} epochs to go. '.format(n_epochs))
-        logging.critical('{} steps per epoch.'.format(num_of_steps_per_epoch))
-        logging.critical('saving variables to path: {}'.format(logdir))
+        logging.info('{} LabeledSentences_train sentences.'.format(document_size))
+        logging.info('{} samples.'.format(sample_len))
+        logging.info('{} steps to go. '.format(n_steps))
+        logging.info('{} epochs to go. '.format(n_epochs))
+        logging.info('{} steps per epoch.'.format(num_of_steps_per_epoch))
+        logging.info('saving variables to path: {}'.format(logdir))
 
         model = doc2vec_model(model_type=model_type,
                               embedding_size_w=embedding_size_w,
@@ -61,6 +63,7 @@ def train(model_type,
                               num_of_steps_per_epoch=num_of_steps_per_epoch,
                               tolerance=tolerance,
                               eplison=eplison,
+                              num_neg_samples=num_neg_samples,
                               n_epochs=n_epochs,
                               logdir=logdir)
         #
@@ -92,7 +95,7 @@ def train(model_type,
         session_conf = tf.ConfigProto(allow_soft_placement=True,
                                       log_device_placement=False)
         session_conf.gpu_options.allow_growth = True
-        logging.critical(str(datetime.now()).replace(':', '-') + '  Start training. ')
+        logging.info(str(datetime.now()).replace(':', '-') + '  Start training. ')
         with tf.Session(config=session_conf).as_default() as sess:
 
             sess.run(tf.global_variables_initializer())
@@ -101,36 +104,37 @@ def train(model_type,
                 loss = train_step(x_train_batch, y_train_batch)
                 current_step = tf.train.global_step(sess, model.global_step)
                 total_train_loss += loss
-                # if current_step%100==0:
-                #     print (current_step)
+
                 if (current_step % num_of_steps_per_epoch == 0) and (tolerance > 0):
                     avg_train_loss = total_train_loss / num_of_steps_per_epoch
-                    logging.critical(
-                        'Current epoch: {}, avg loss on train set: {}'.format(current_epoch, avg_train_loss))
+                    logging.info(
+                        '[train ' + model.model_type + '] {}, avg loss on train set: {}'.format(current_epoch,
+                                                                                                avg_train_loss))
 
                     if best_train_avg_loss - avg_train_loss > eplison:
                         best_train_avg_loss, best_at_step, best_at_epoch = avg_train_loss, current_step, current_epoch
                     else:
                         tolerance -= 1
-                        logging.critical(
-                            '{} tolerance left,best avg train loss: {} at step {}, epoch {}. '.format(tolerance,
-                                                                                                      best_train_avg_loss,
-                                                                                                      best_at_step,
-                                                                                                      best_at_epoch))
+                        logging.info(
+                            '[train ' + model.model_type + '] {} tolerance left,best avg train loss: {} at step {}, epoch {}. '.format(
+                                tolerance,
+                                best_train_avg_loss,
+                                best_at_step,
+                                best_at_epoch))
 
                     if (current_epoch % eval_every_epochs == 0) or (tolerance == 0) or (current_epoch == n_epochs):
 
-                        logging.critical('+++++++++++++++++++++++++++++++++++eval+++++++++++++++++++++++++++++++++')
+                        logging.info('+++++++++++++++++++++++++++++++++++eval+++++++++++++++++++++++++++++++++')
                         sim_matric_argmax_ix = model.calSimilarity(sess, k=10)  # 计算相似度，LabeledSentences_train前十个句子
                         oneToTen_ix = range(10)
 
                         assert len(oneToTen_ix) == len(sim_matric_argmax_ix)
 
-                        logging.critical('-' * 80)
+                        logging.info('-' * 80)
                         i = 1
                         for t, sim_t in zip(oneToTen_ix, sim_matric_argmax_ix):
-                            logging.critical('第{}句话: '.format(i))
-                            logging.critical(
+                            logging.info('第{}句话: '.format(i))
+                            logging.info(
                                 train_texts[t] + '\n'
                                 + ' \t\t\t'
                                 + ' '.join(utils.ids2words(index2word, utils.words2ids(word2index, train_texts[t].split(
@@ -141,27 +145,29 @@ def train(model_type,
                                 + ' '.join(utils.ids2words(index2word,
                                                            utils.words2ids(word2index, train_texts[sim_t].split(' ')))))
                             i += 1
-                        logging.critical('-' * 80)
+                        logging.info('-' * 80)
 
                         if (tolerance == 0) or (current_epoch == n_epochs):
                             path = saver.save(sess, checkpoint_prefix, global_step=current_step)
-                            logging.critical(
-                                '{} tolerance left. Saved model at {} at step {}'.format(tolerance, path,
-                                                                                         best_at_step))
-                            logging.critical(
-                                'Best avg loss on train is {} at step {}'.format(best_train_avg_loss, best_at_step))
+                            logging.info(
+                                '[train ' + model.model_type + '] {} tolerance left. Saved model at {} at step {}'.format(
+                                    tolerance, path,
+                                    best_at_step))
+                            logging.info(
+                                '[train ' + model.model_type + '] Best avg loss on train is {} at step {}'.format(
+                                    best_train_avg_loss, best_at_step))
                             break
 
                     total_train_loss = 0
                     current_epoch += 1
 
-    logging.critical(str(datetime.now()).replace(':', '-') + '  Training completed. {} tolerances used. '.format(
+    logging.info(str(datetime.now()).replace(':', '-') + '  Training completed. {} tolerances used. '.format(
         model.tolerance - tolerance))
 
 
 def get_embeddings(checkpoint_dir, model_type):
     checkpoint_file = tf.train.latest_checkpoint(checkpoint_dir)
-    logging.critical('Loaded the trained model: {}'.format(checkpoint_file))
+    logging.info( '[get embedding ' + model_type + '] Loaded the trained model: {}'.format(checkpoint_file))
     graph = tf.Graph()
     with graph.as_default():
         session_conf = tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)
@@ -170,20 +176,21 @@ def get_embeddings(checkpoint_dir, model_type):
             saver = tf.train.import_meta_graph("{}.meta".format(checkpoint_file))
             saver.restore(sess, checkpoint_file)
             if (model_type == 'pvdm'):
-                normalized_word_embeddings = graph.get_operation_by_name('word_embeddings').outputs[0]
+                normalized_word_embeddings = graph.get_operation_by_name('word_embeddings_norm').outputs[0]
                 word_embeddings = sess.run(normalized_word_embeddings)
             else:
                 word_embeddings = None
 
-            normalized_doc_embeddings = graph.get_operation_by_name('doc_embeddings').outputs[0]
+            normalized_doc_embeddings = graph.get_operation_by_name('doc_embeddings_norm').outputs[0]
             doc_embeddings = sess.run(normalized_doc_embeddings)
     return word_embeddings, doc_embeddings
 
 
 def infer(checkpoint_dir_pvdm,
           checkpoint_dir_pvdbow,
-          new_LabeledSentences_train,
-          train_texts,
+          infer_LabeledSentences,
+          trained_texts,
+          infer_texts,
           word2index,
           index2word,
           vocabulary_size,
@@ -194,6 +201,7 @@ def infer(checkpoint_dir_pvdm,
           embedding_size_w,
           embedding_size_d,
           learning_rate,
+          num_neg_samples,
           eplison,
           tolerance,
           n_epochs,
@@ -221,28 +229,29 @@ def infer(checkpoint_dir_pvdm,
     # pvdbow infer
     new_train_batches_pvdbow = utils.generate_pvdbow_batches(batch_size=batch_size,
                                                              window_size=window_size,
-                                                             LabeledSentences=new_LabeledSentences_train,
+                                                             LabeledSentences=infer_LabeledSentences,
                                                              n_epochs=n_epochs)
     num_of_batches_total = len(new_train_batches_pvdbow)
     n_steps = num_of_batches_total
     sample_len = num_of_batches_total * batch_size
     num_of_steps_per_epoch = num_of_batches_total // n_epochs + 1
-    logging.critical(str(datetime.now()).replace(':', '-') + '  Start infering pvdbow. ')
-    logging.critical('{} new LabeledSentences_train_pvdbow sentences.'.format(document_size))
-    logging.critical('{} samples.'.format(sample_len))
-    logging.critical('{} steps to go. '.format(n_steps))
-    logging.critical('{} epochs to go. '.format(n_epochs))
+    logging.info(str(datetime.now()).replace(':', '-') + '  Start infering pvdbow. ')
+    logging.info('[infer pvdbow] {} new LabeledSentences_train_pvdbow sentences.'.format(document_size))
+    logging.info('[infer pvdbow] {} samples.'.format(sample_len))
+    logging.info('[infer pvdbow] {} steps to go. '.format(n_steps))
+    logging.info('[infer pvdbow] {} epochs to go. '.format(n_epochs))
 
     model_pvdbow_infer = doc2vec_model(model_type=None,
                                        embedding_size_w=embedding_size_w,
                                        embedding_size_d=embedding_size_d,
                                        batch_size=batch_size,
-                                       learning_rate=0.001,
+                                       learning_rate=learning_rate,
                                        vocabulary_size=vocabulary_size,
                                        document_size=document_size,
                                        eval_every_epochs=eval_every_epochs,
                                        num_of_steps_per_epoch=num_of_steps_per_epoch,
                                        tolerance=tolerance,
+                                       num_neg_samples=num_neg_samples,
                                        eplison=eplison,
                                        n_epochs=n_epochs,
                                        logdir=logdir)
@@ -251,34 +260,36 @@ def infer(checkpoint_dir_pvdm,
         model_pvdbow_infer.infer_vector_pvdbow(checkpoint_dir=checkpoint_dir_pvdbow,
                                                index2word=index2word,
                                                word2index=word2index,
-                                               train_texts=train_texts,
+                                               trained_texts=trained_texts,
+                                               infer_texts=infer_texts,
                                                new_train_batches=new_train_batches_pvdbow)
 
     # pvdm infer
     new_train_batches_pvdm = utils.generate_pvdm_batches(batch_size=batch_size,
-                                                           window_size=window_size,
-                                                           LabeledSentences=new_LabeledSentences_train,
-                                                           n_epochs=n_epochs)
+                                                         window_size=window_size,
+                                                         LabeledSentences=infer_LabeledSentences,
+                                                         n_epochs=n_epochs)
 
     num_of_batches_total = len(new_train_batches_pvdm)
     n_steps = num_of_batches_total
     sample_len = num_of_batches_total * batch_size
     num_of_steps_per_epoch = num_of_batches_total // n_epochs + 1
-    logging.critical(str(datetime.now()).replace(':', '-') + '  Start infering pvdm. ')
-    logging.critical('{} new LabeledSentences_train-pvdm sentences.'.format(document_size))
-    logging.critical('{} samples.'.format(sample_len))
-    logging.critical('{} steps to go. '.format(n_steps))
-    logging.critical('{} epochs to go. '.format(n_epochs))
+    logging.info(str(datetime.now()).replace(':', '-') + '  Start infering pvdm. ')
+    logging.info('[infer pvdm] {} new LabeledSentences_train-pvdm sentences.'.format(document_size))
+    logging.info('[infer pvdm] {} samples.'.format(sample_len))
+    logging.info('[infer pvdm] {} steps to go. '.format(n_steps))
+    logging.info('[infer pvdm] {} epochs to go. '.format(n_epochs))
     model_pvdm_infer = doc2vec_model(model_type=None,  # fake infer model
                                      embedding_size_w=embedding_size_w,
                                      embedding_size_d=embedding_size_d,
                                      batch_size=batch_size,
-                                     learning_rate=0.001,
+                                     learning_rate=learning_rate,
                                      vocabulary_size=vocabulary_size,
                                      document_size=document_size,
                                      eval_every_epochs=eval_every_epochs,
                                      num_of_steps_per_epoch=num_of_steps_per_epoch,
                                      tolerance=tolerance,
+                                     num_neg_samples=num_neg_samples,
                                      eplison=eplison,
                                      n_epochs=n_epochs,
                                      logdir=logdir)
@@ -287,13 +298,12 @@ def infer(checkpoint_dir_pvdm,
         model_pvdm_infer.infer_vector_pvdm(checkpoint_dir=checkpoint_dir_pvdm,
                                            word2index=word2index,
                                            index2word=index2word,
-                                           train_texts=train_texts,
+                                           trained_texts=trained_texts,
+                                           infer_texts=infer_texts,
                                            new_train_batches=new_train_batches_pvdm)
 
     assert new_doc_start_index_pvdbow == new_doc_start_index_pvdm
     assert new_doc_embeddings_pvdm.shape == new_doc_embeddings_pvdbow.shape
 
-    print (np.concatenate((new_doc_embeddings_pvdm[new_doc_start_index_pvdm:],
-                    new_doc_embeddings_pvdbow[new_doc_start_index_pvdbow:]), axis=1).shape)
     return np.concatenate((new_doc_embeddings_pvdm[new_doc_start_index_pvdm:],
                            new_doc_embeddings_pvdbow[new_doc_start_index_pvdbow:]), axis=1)

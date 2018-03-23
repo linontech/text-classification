@@ -14,17 +14,12 @@ evaluation:
 
 requirements: ( recommend [Google Colab](https://colab.research.google.com) with free 12-hour GPU, Tesla K80, [tutorial](https://medium.com/deep-learning-turkey/google-colab-free-gpu-tutorial-e113627b9f5d) here )
 
-- 8GB memory	
-
+- 8GB memory, with Nvidia GeForce MX150, compute capability: 6.1
 - python3.5
-
 - tensorflow-gpu 1.4.0
-
 - numpy 1.13.1
-
 - jieba 0.39
-
 - t-SNE
 
-  ​
 
+my .ipynb online: https://drive.google.com/file/d/1WPWM103comn-1kyGv5FXGO-ZC2Lt7ChH/view?usp=sharing
