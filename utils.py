@@ -345,7 +345,7 @@ def evaluate_analysis(x, y, y_pred, thresold, path):
     f.close()
 
 
-def ovs_minority_text(texts, minority_texts, k, n=2,
+def ovs_minority_text(texts, minority_texts, k=None, n=2,
                       stop_words_file='dataset/stopwords.txt'):
     """
         simple generate positive samples by traditional language model until meet </s>
@@ -357,11 +357,12 @@ def ovs_minority_text(texts, minority_texts, k, n=2,
 
     :param texts: already cutted sentences
     :param minority_texts: LabeledSen list
-    :param word2count:
-    # :param n: n=2 stands for unigram, bigram; try bigram first
+    :param n: n=2 stands for unigram, bigram; try bigram first
     :param k: how many sentences to generate
     :return: generate sentences
     """
+    if n!=2:
+        logging.critical('Not implemented yet. :)')
     # build bigram indexes for all sentences
     bigrams_dict = {}
     unigram_dict = {}
@@ -412,6 +413,7 @@ def ovs_minority_text(texts, minority_texts, k, n=2,
         start_words += tf_idf_sorted[:2]
 
     # choose big tf-idf words for each minority sentences as the begin when generating sentenece
+    # try: subsample k words from start_words
     logging.info('generating minority sentences from {} start words.'.format(len(start_words)))
     generated_sens = []
     for word in start_words:
@@ -462,4 +464,4 @@ if __name__ == '__main__':
 
     assert len(train_data_1 + train_data_0) == len(train_texts)
 
-    ovs_minority_text(train_data_1 + train_data_0, train_data_1, word2count, word2index, 1, 1)
+    ovs_minority_text(train_data_1 + train_data_0, train_data_1, word2index, None, 2)
