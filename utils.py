@@ -29,6 +29,15 @@ def load_model(filename):
         # 测试读取后的Model
     return model
 
+def save_obj(obj, path):
+    import pickle
+    with open(path, 'wb') as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+def load_obj(path):
+    import pickle
+    with open(path, 'rb') as f:
+        return pickle.load(f)
 
 def Chinese_word_extraction(content_raw):
     chinese_pattern = u"([\u4e00-\u9fa5]+)"
@@ -119,9 +128,6 @@ def build_vocabulary(input_data, stop_words_file='dataset/stopwords.txt', k=100,
 
 def generate_texts2indexes(input_data, word2index):
     """
-    Mikolov 2014 ：如果句子的长度小于window_size，那么剩下的单词用__NULL__标签代替，且放在前面。
-    num_skip: 一个窗口最多采样多少样本; prevent overfitting issue
-    '__NULL__' 表示句子还不够一个window_size那么长
     :param input_data: listOfText，已经分词
     :param labels: 对应的标签
     :return: LabelDoc, [（编号，分词句子中词语index）]
@@ -138,6 +144,9 @@ def generate_texts2indexes(input_data, word2index):
 
 def generate_pvdm_batches(LabeledSentences, n_epochs, batch_size, window_size, shuffle=True):
     """
+    Mikolov 2014 ：如果句子的长度小于window_size，那么剩下的单词用__NULL__标签代替，且放在前面。
+    num_skip: 一个窗口最多采样多少样本; prevent overfitting issue
+    '__NULL__' 表示句子还不够一个window_size那么长。
     add num_skip variables to limit samples generate from one window
     :param batch_size:
     :param window_size:
@@ -297,19 +306,6 @@ def load_data(filepath, sample_file_path, data_size=350000):
             # if i%50000==0:
             #     print (i)
     thefile.close()
-
-
-def save_obj(obj, path):
-    import pickle
-    with open(path, 'wb') as f:
-        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
-
-
-def load_obj(path):
-    import pickle
-    with open(path, 'rb') as f:
-        return pickle.load(f)
-
 
 def evaluate_analysis(x, y, y_pred, thresold, path):
     """
