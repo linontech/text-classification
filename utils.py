@@ -29,15 +29,18 @@ def load_model(filename):
         # 测试读取后的Model
     return model
 
+
 def save_obj(obj, path):
     import pickle
     with open(path, 'wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
 
+
 def load_obj(path):
     import pickle
     with open(path, 'rb') as f:
         return pickle.load(f)
+
 
 def Chinese_word_extraction(content_raw):
     chinese_pattern = u"([\u4e00-\u9fa5]+)"
@@ -48,6 +51,8 @@ def Chinese_word_extraction(content_raw):
 
 def accept_sentence(sentnece):
     return Chinese_word_extraction(sentnece)
+
+
 # def accept_word(word):
 #     return
 
@@ -106,7 +111,7 @@ def build_vocabulary(input_data, stop_words_file='dataset/stopwords.txt', k=100,
     word2count['UNK'] = unk_count
 
     index = 2
-    word2index = {'_UNK_': 0, '_NULL_': 1}
+    word2index = {'_UNK_': 0, '_NULL_': 1} #'_<s>_': -1, '_</s>_': -2}
     remove_words = []
     for word, count in word2count.items():
         if count >= min_appear_freq:
@@ -307,6 +312,7 @@ def load_data(filepath, sample_file_path, data_size=350000):
             #     print (i)
     thefile.close()
 
+
 def evaluate_analysis(x, y, y_pred, thresold, path):
     """
     :param x:
@@ -329,7 +335,7 @@ def evaluate_analysis(x, y, y_pred, thresold, path):
         y_pred_single = 1 if y_pred[ix] > thresold  else 0
         if y_pred_single != y[ix]:  # write error first
             f.write(str(ix + 1) + '\t' + str(y[ix]) + '\t' +
-                    str(y_pred[ix]) + '\t' +  str(x[ix]) + '\n')
+                    str(y_pred[ix]) + '\t' + str(x[ix]) + '\n')
         tmp.append(str(ix + 1) + '\t' + str(y[ix]) + '\t' +
                    str(y_pred[ix]) + '\t' + str(x[ix]) + '\n')
     f.write('-----------------------ALL RESULT------------------------')
@@ -337,3 +343,94 @@ def evaluate_analysis(x, y, y_pred, thresold, path):
         f.write(text)
 
     f.close()
+
+
+def ovs_minority_text(texts, minority_texts, word2count, n, k,
+                      stop_words_file='dataset/stopwords.txt'):
+    """
+        simple generate positive samples by language model until meet </s>
+    :param texts: already cutted sentences
+    :param minority_texts: LabeledSen list
+    :param word2count:
+    :param n: n=2 stands for unigram, bigram; try bigram first
+    :param k:
+    :return:
+    """
+    # build bigram indexes for all sentences
+    bigrams_dict = {}
+    unigram_dict = {}
+    idf_dict = {}
+    for text in texts:
+        text = '<s> '+text+' </s>'
+        word_list = text.split(' ')
+        indexes_len = len(word_list)
+        tmp = set()
+        for pos in range(indexes_len - 1):
+            key = (word_list[pos], word_list[pos + 1])
+            bigrams_dict[key] = bigrams_dict.get(key, 0) + 1
+            if pos != 0:
+                word = word_list[pos]
+                unigram_dict[word] = unigram_dict.get(word, 0) + 1
+                if ((len(tmp) == 0) and (idf_dict.get(word, 0) == 0)) or ((len(tmp) != 0) and (word not in tmp)):
+                    idf_dict[word] = idf_dict.get(word, 0) + 1
+
+    # calculate tf-idf of every words; how a word affect a sentence
+    logging.info('len of bigram dict: {}'.format(len(bigrams_dict)))
+    logging.info('len of tf-idf dict: {}'.format(len(idf_dict)))
+
+    sen_len = len(texts)
+    tf_idf_dict = {}
+    for key, idf_value in idf_dict.items():
+        tf_idf_dict[key] = unigram_dict[key]/ * np.log(sen_len / idf_value) ##########################
+
+    assert len(tf_idf_dict) > len(word2index), 'idf gernerate wrong.'  # for not consider stopwords
+    tf_idf_list = sorted(tf_idf_dict.items(), key=lambda x: x[1], reverse=True)
+
+    # choose big tf-idf words in the minority sentences as the begin when generating sentenece
+    negative_words = set()
+    for text in minority_texts:
+        negative_words.update(set(text.split(' ')))  # indexes is a 1 dim array
+
+    print (tf_idf_list[:100])
+    # for word in tf_idf_list[:1000]:
+    #     if word in negative_words:
+    #         print(word)
+    ovs_texts = []
+
+    # id2count_minority = {}
+    # for labeledSen in minority_text_indexes:
+    #     for index in labeledSen.word_indexes:
+    #         id2count_minority[index] = id2count_minority.get(index, 0) + 1
+    #
+    # id2count_minority_list = sorted(id2count_minority.items(), key=lambda x:x[1], reverse=True)
+    # for i in id2count_minority_list[:10]:
+    #     print (word2index[i])
+
+    return ovs_texts
+
+
+if __name__ == '__main__':
+
+    min_appear_freq = 1  # 1
+    k_mostcommon_ignore = 100  # 这里考虑停用词
+    train_filepath = 'dataset/digital forum comments/20171211_train.txt'
+
+    train_texts, train_labels = load_data_label(train_filepath)
+    word2count, word2index, index2word = build_vocabulary(train_texts,
+                                                          stop_words_file='dataset/stopwords.txt',
+                                                          k=k_mostcommon_ignore,
+                                                          min_appear_freq=min_appear_freq)
+    train_labels = np.array(train_labels)
+    ix_for_1 = np.where(train_labels == 1)
+    ix_for_0 = np.where(train_labels == 0)
+
+    train_data_0 = []
+    train_data_1 = []
+    for index in ix_for_1[0]:
+        train_data_1.append(train_texts[index])
+    for index in ix_for_0[0]:
+        train_data_0.append(train_texts[index])
+
+    assert len(train_data_1 + train_data_0) == len(train_texts)
+
+    ovs_minority_text(train_data_1 + train_data_0, train_data_1, word2count, word2index, 1, 1)
