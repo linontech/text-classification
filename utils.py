@@ -111,7 +111,7 @@ def build_vocabulary(input_data, stop_words_file='dataset/stopwords.txt', k=100,
     word2count['UNK'] = unk_count
 
     index = 2
-    word2index = {'_UNK_': 0, '_NULL_': 1} #'_<s>_': -1, '_</s>_': -2}
+    word2index = {'_UNK_': 0, '_NULL_': 1}  # '_<s>_': -1, '_</s>_': -2}
     remove_words = []
     for word, count in word2count.items():
         if count >= min_appear_freq:
@@ -345,23 +345,29 @@ def evaluate_analysis(x, y, y_pred, thresold, path):
     f.close()
 
 
-def ovs_minority_text(texts, minority_texts, word2count, n, k,
+def ovs_minority_text(texts, minority_texts, k, n=2,
                       stop_words_file='dataset/stopwords.txt'):
     """
-        simple generate positive samples by language model until meet </s>
+        simple generate positive samples by traditional language model until meet </s>
+        things to try:
+            different len of sentences (median, majority)
+            generate sentence from all sentences' bigram model
+            haven't take into account the frequency of bigrams
+            haven't take into account to ignore stopwords
+
     :param texts: already cutted sentences
     :param minority_texts: LabeledSen list
     :param word2count:
-    :param n: n=2 stands for unigram, bigram; try bigram first
-    :param k:
-    :return:
+    # :param n: n=2 stands for unigram, bigram; try bigram first
+    :param k: how many sentences to generate
+    :return: generate sentences
     """
     # build bigram indexes for all sentences
     bigrams_dict = {}
     unigram_dict = {}
     idf_dict = {}
     for text in texts:
-        text = '<s> '+text+' </s>'
+        text = '<s> ' + text + ' </s>'
         word_list = text.split(' ')
         indexes_len = len(word_list)
         tmp = set()
@@ -371,42 +377,65 @@ def ovs_minority_text(texts, minority_texts, word2count, n, k,
             if pos != 0:
                 word = word_list[pos]
                 unigram_dict[word] = unigram_dict.get(word, 0) + 1
-                if ((len(tmp) == 0) and (idf_dict.get(word, 0) == 0)) or ((len(tmp) != 0) and (word not in tmp)):
-                    idf_dict[word] = idf_dict.get(word, 0) + 1
+                if (len(tmp) == 0) or ((len(tmp) != 0) and (word not in tmp)):
+                    idf_dict[word] = idf_dict.get(word, 0) + 1  # idf value from all sentence
+
+    sen_len = len(texts)
+    tf_idf_rs = []
+    minority_bigrams_dict = {}
+    sentences_count = 0
+    for text in minority_texts:
+        word_list = text.split(' ')
+        indexes_len = len(word_list)
+        sentences_count += indexes_len
+        rs = []
+        for word in set(word_list):
+            # print (word)
+            # print (word_list.count(word))
+            rs.append((word, (word_list.count(word) / indexes_len) * np.log(sen_len / idf_dict[word])))
+        tf_idf_rs.append(rs)
+        for pos in range(indexes_len - 1):
+            key = (word_list[pos], word_list[pos + 1])
+            if key[0] == key[1]:
+                continue
+            minority_bigrams_dict[key] = minority_bigrams_dict.get(key, 0) + 1  # minority_bigrams_dict
 
     # calculate tf-idf of every words; how a word affect a sentence
     logging.info('len of bigram dict: {}'.format(len(bigrams_dict)))
-    logging.info('len of tf-idf dict: {}'.format(len(idf_dict)))
+    logging.info('len of minority bigram dict: {}'.format(len(minority_bigrams_dict)))
+    logging.info('len of unigram dict: {}'.format(len(unigram_dict)))
 
-    sen_len = len(texts)
-    tf_idf_dict = {}
-    for key, idf_value in idf_dict.items():
-        tf_idf_dict[key] = unigram_dict[key]/ * np.log(sen_len / idf_value) ##########################
+    # assert len(tf_idf_dict) > len(word2index), 'idf gernerate wrong.'  # for not consider stopwords
+    tf_idf_each_sentence, start_words = [], []
+    for word_tf_idf in tf_idf_rs:
+        tf_idf_sorted = sorted(word_tf_idf, key=lambda x: x[1], reverse=True)
+        start_words += tf_idf_sorted[:2]
 
-    assert len(tf_idf_dict) > len(word2index), 'idf gernerate wrong.'  # for not consider stopwords
-    tf_idf_list = sorted(tf_idf_dict.items(), key=lambda x: x[1], reverse=True)
+    # choose big tf-idf words for each minority sentences as the begin when generating sentenece
+    logging.info('generating minority sentences from {} start words.'.format(len(start_words)))
+    generated_sens = []
+    for word in start_words:
+        generated_sen = '' + word[0]
+        count = 0
+        next_word = word[0]
+        while (1):
+            next_words = [key[1] for key, value in minority_bigrams_dict.items() if key[0] == next_word]
+            next_words_num = len(next_words)
+            next_word = ''
+            if next_words_num != 0:
+                secure_random = random.SystemRandom()
+                next_word = secure_random.choice(next_words)
 
-    # choose big tf-idf words in the minority sentences as the begin when generating sentenece
-    negative_words = set()
-    for text in minority_texts:
-        negative_words.update(set(text.split(' ')))  # indexes is a 1 dim array
+            if (next_words_num == 0) or (next_word == '<\s>') or (
+                count > 20):  # count > average length sentences_count/sen_len
+                generated_sen += ' <\s>'  # majority num or median
+                break
+            generated_sen += ' ' + next_word
+            count += 1
+        generated_sens.append(generated_sen)
+        # print (generated_sen)
 
-    print (tf_idf_list[:100])
-    # for word in tf_idf_list[:1000]:
-    #     if word in negative_words:
-    #         print(word)
-    ovs_texts = []
-
-    # id2count_minority = {}
-    # for labeledSen in minority_text_indexes:
-    #     for index in labeledSen.word_indexes:
-    #         id2count_minority[index] = id2count_minority.get(index, 0) + 1
-    #
-    # id2count_minority_list = sorted(id2count_minority.items(), key=lambda x:x[1], reverse=True)
-    # for i in id2count_minority_list[:10]:
-    #     print (word2index[i])
-
-    return ovs_texts
+    return generated_sens
 
 
 if __name__ == '__main__':
