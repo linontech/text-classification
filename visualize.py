@@ -13,12 +13,10 @@ from sklearn.manifold import TSNE
 import utils
 from train_utils import get_embeddings
 
-# locator.MAXTICKS = 10000
-
 def plot_with_labels(vis_x, vis_y, labels, title=None):
+
     # x_min, x_max = np.min(X, 0), np.max(X, 0)
     # X = (X - x_min) / (x_max - x_min)
-
     # colors = ["gold", "limegreen"]
     # cmap = matplotlib.colors.ListedColormap(colors)
     label_num = len(set(labels))
@@ -32,6 +30,10 @@ def plot_with_labels(vis_x, vis_y, labels, title=None):
 
     plt.savefig('pca-tsne.png')
 
+"""
+    visualize doc_embeddings with a 2 dimension graph, try using PCA or tSNE.
+
+"""
 
 print('Get embeddings.')
 trained_model_checkpoint_dir_pvdbow = 'model/trained_model_pvdbow_2018-03-22 05-22-01.830643/checkpoints'
@@ -71,9 +73,6 @@ assert len(train_labels_0_ix) == 20000
 n_sne_len = len(train_labels_1_ix[0]) + len(train_labels_0_ix)
 print('drawing {} points. '.format(n_sne_len))
 n_sne_ix = np.concatenate((train_labels_0_ix, train_labels_1_ix[0]))
-
-# print (embedding[n_sne_ix].shape)
-# exit()
 
 t0 = time.time()
 tsne = TSNE(n_components=2, verbose=1, perplexity=40, n_iter=300)

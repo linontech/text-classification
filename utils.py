@@ -5,14 +5,13 @@ import random
 import re
 from collections import namedtuple
 from datetime import datetime
-
 import jieba
 import numpy as np
 
 random.seed(3)
 logging.getLogger().setLevel(logging.INFO)
 jieba.load_userdict('dataset/digital forum comments/digital_selfdict.txt')
-
+# jieba.load_userdict('dataset/car forum comments/carSelfDict.txt')
 LabelSen = namedtuple('LabeledSen', ['sentence_index', 'word_indexes'])
 
 
@@ -43,7 +42,8 @@ def load_obj(path):
 
 
 def Chinese_word_extraction(content_raw):
-    chinese_pattern = u"([\u4e00-\u9fa5]+)"
+    # chinese_pattern = u"([\u4e00-\u9fa5]+)"
+    chinese_pattern = u"([\u4e00-\u9fa5a-zA-Z]+)"
     chi_pattern = re.compile(chinese_pattern)
     listOfwords = chi_pattern.findall(content_raw)
     return listOfwords
@@ -127,7 +127,6 @@ def build_vocabulary(input_data, stop_words_file='dataset/stopwords.txt', k=100,
     logging.info('{} remove words: \n {}'.format(len(remove_words), str(remove_words)))
     logging.info(str(datetime.now()).replace(':', '-') + '  End building vocabulary. length of vocabulary: {}'.format(
         len(index2word)))
-
     return word2count, word2index, index2word
 
 
@@ -186,7 +185,7 @@ def generate_pvdm_batches(LabeledSentences, n_epochs, batch_size, window_size, s
 
     data = np.array(sample_label_s)
     data_size = len(sample_label_s)
-    num_batches_per_epoch = int(data_size / batch_size) + 1  # num_of_step_per_epoch
+    num_batches_per_epoch = int(data_size / batch_size)  # num_of_step_per_epoch
 
     batches = []
     for epoch in range(n_epochs):  # batch_iter
@@ -199,8 +198,8 @@ def generate_pvdm_batches(LabeledSentences, n_epochs, batch_size, window_size, s
         for batch_num in range(num_batches_per_epoch):
             start_index = batch_num * batch_size
             end_index = min((batch_num + 1) * batch_size, data_size)
-            if len(shuffled_data[start_index:end_index]) != batch_size:
-                continue
+            # if len(shuffled_data[start_index:end_index]) != batch_size:
+            #     continue # throw away the rest samples
             # yield shuffled_data[start_index:end_index]
             batches.append(shuffled_data[start_index:end_index])
     return batches
@@ -225,7 +224,7 @@ def generate_pvdbow_batches(LabeledSentences, n_epochs, batch_size, window_size,
 
     data = np.array(sample_label_s)
     data_size = len(sample_label_s)
-    num_batches_per_epoch = int(data_size / batch_size) + 1
+    num_batches_per_epoch = int(data_size / batch_size)
     batches = []
     for epoch in range(n_epochs):  # batch_iter
         if shuffle:
@@ -234,17 +233,22 @@ def generate_pvdbow_batches(LabeledSentences, n_epochs, batch_size, window_size,
         else:
             shuffled_data = data
 
-        for batch_num in range(num_batches_per_epoch):
+        for batch_num in range(num_batches_per_epoch): # start from 0
             start_index = batch_num * batch_size
             end_index = min((batch_num + 1) * batch_size, data_size)
-            if len(shuffled_data[start_index:end_index]) != batch_size:
-                continue
+            # if len(shuffled_data[start_index:end_index]) != batch_size:
+            #     continue # throw away the rest samples
             # yield shuffled_data[start_index:end_index]
             batches.append(shuffled_data[start_index:end_index])
     return batches
 
 
 def load_data_label(filepath):
+    """
+    return texts splited by ' '
+    :param filepath:
+    :return:
+    """
     file = open(filepath, encoding='utf-8')
     lines = file.read().split('\n')
     file.close()
@@ -253,7 +257,7 @@ def load_data_label(filepath):
         text = line.split('\t')[0]
         label = line.split('\t')[1]
         text = accept_sentence(text)
-        text = jieba.lcut(''.join(text), HMM=False)
+        text = jieba.lcut(''.join(text))
         texts.append(' '.join(text))
         if label == '中立':
             labels.append(0)
@@ -264,6 +268,17 @@ def load_data_label(filepath):
 
 
 def load_data(filepath, sample_file_path, data_size=350000):
+    """
+
+    :param filepath:
+    :param sample_file_path:
+    :param data_size:
+    :return:
+     e.g
+     train_texts = utils.load_data(filepath='dataset/sentence_20180318_without_stopwords.txt',
+                                   sample_file_path='dataset/sample_sentences.txt',
+                                   data_size=100000) # 175000
+    """
     with open(sample_file_path, encoding='utf-8') as file:
         sample_count = 0
         for line in file:
@@ -312,57 +327,26 @@ def load_data(filepath, sample_file_path, data_size=350000):
             #     print (i)
     thefile.close()
 
-
-def evaluate_analysis(x, y, y_pred, thresold, path):
-    """
-    :param x:
-    :param y:
-    :param y_pred:
-    :param thresold:
-    :param path: path of result out folder
-    :return:
-    """
-    # assert y.shape == y_pred.shape
-    logging.info('writing error analysis result to ' + path)
-    from sklearn.metrics import classification_report
-    y_predHat = [1 if i > thresold else 0 for i in y_pred]
-    classification_report(y, y_predHat)
-    f = open(path, 'w', encoding='utf-8')
-
-    tmp = []
-    f.write('ix\t' + 'real\t' + 'pred\t' + 'text\n')
-    for ix in range(len(y_pred)):
-        y_pred_single = 1 if y_pred[ix] > thresold  else 0
-        if y_pred_single != y[ix]:  # write error first
-            f.write(str(ix + 1) + '\t' + str(y[ix]) + '\t' +
-                    str(y_pred[ix]) + '\t' + str(x[ix]) + '\n')
-        tmp.append(str(ix + 1) + '\t' + str(y[ix]) + '\t' +
-                   str(y_pred[ix]) + '\t' + str(x[ix]) + '\n')
-    f.write('-----------------------ALL RESULT------------------------')
-    for text in tmp:
-        f.write(text)
-
-    f.close()
-
-
-def ovs_minority_text(texts, minority_texts, k=None, n=2,
+def ovs_minority_text(texts, minority_texts, k, n=2,
                       stop_words_file='dataset/stopwords.txt'):
     """
         simple generate positive samples by traditional language model until meet </s>
         things to try:
             different len of sentences (median, majority)
             generate sentence from all sentences' bigram model
-            haven't take into account the frequency of bigrams
-            haven't take into account to ignore stopwords
+            take into account the frequency of bigrams
+            take into account to ignore stopwords
+            slow speed 1.5k sentence, about 1 hr
 
     :param texts: already cutted sentences
     :param minority_texts: LabeledSen list
     :param n: n=2 stands for unigram, bigram; try bigram first
-    :param k: how many sentences to generate
+    :param k: how many sentences to generate, k= num*len(minority_text)
     :return: generate sentences
     """
-    if n!=2:
+    if n != 2:
         logging.critical('Not implemented yet. :)')
+    logging.info('Attempt to generate {} sentences'.format(k))
     # build bigram indexes for all sentences
     bigrams_dict = {}
     unigram_dict = {}
@@ -384,61 +368,189 @@ def ovs_minority_text(texts, minority_texts, k=None, n=2,
     sen_len = len(texts)
     tf_idf_rs = []
     minority_bigrams_dict = {}
-    sentences_count = 0
+    sentences_count = []
     for text in minority_texts:
         word_list = text.split(' ')
         indexes_len = len(word_list)
-        sentences_count += indexes_len
+        sentences_count.append(indexes_len)
         rs = []
         for word in set(word_list):
-            # print (word)
-            # print (word_list.count(word))
             rs.append((word, (word_list.count(word) / indexes_len) * np.log(sen_len / idf_dict[word])))
         tf_idf_rs.append(rs)
         for pos in range(indexes_len - 1):
             key = (word_list[pos], word_list[pos + 1])
-            if key[0] == key[1]:
-                continue
             minority_bigrams_dict[key] = minority_bigrams_dict.get(key, 0) + 1  # minority_bigrams_dict
+
 
     # calculate tf-idf of every words; how a word affect a sentence
     logging.info('len of bigram dict: {}'.format(len(bigrams_dict)))
     logging.info('len of minority bigram dict: {}'.format(len(minority_bigrams_dict)))
     logging.info('len of unigram dict: {}'.format(len(unigram_dict)))
 
-    # assert len(tf_idf_dict) > len(word2index), 'idf gernerate wrong.'  # for not consider stopwords
     tf_idf_each_sentence, start_words = [], []
     for word_tf_idf in tf_idf_rs:
         tf_idf_sorted = sorted(word_tf_idf, key=lambda x: x[1], reverse=True)
-        start_words += tf_idf_sorted[:2]
+        start_words += tf_idf_sorted[:3]
 
     # choose big tf-idf words for each minority sentences as the begin when generating sentenece
     # try: subsample k words from start_words
-    logging.info('generating minority sentences from {} start words.'.format(len(start_words)))
+    median_sen_len = np.median(sentences_count)
+    logging.info(
+        'generating minority sentences with len {}, from {} start words.'.format(median_sen_len, len(start_words)))
     generated_sens = []
-    for word in start_words:
+    random.shuffle(start_words)
+    logging.info('start ' + str(datetime.now()).replace(':', '-'))
+    for c, word in enumerate(start_words):
         generated_sen = '' + word[0]
         count = 0
         next_word = word[0]
         while (1):
-            next_words = [key[1] for key, value in minority_bigrams_dict.items() if key[0] == next_word]
-            next_words_num = len(next_words)
-            next_word = ''
+            next_words = [(key,value) for key, value in minority_bigrams_dict.items() if key[0] == next_word]
+            next_words_keys = [key[1] for key, value in next_words]
+            next_words_value = [value for key, value in next_words]
+            deno=sum(next_words_value)
+            next_words_freq = [value/deno for value in next_words_value]
+            next_words_num = len(next_words_keys)
             if next_words_num != 0:
-                secure_random = random.SystemRandom()
-                next_word = secure_random.choice(next_words)
-
+                next_word = np.random.choice(next_words_keys, p=next_words_freq) # condition with freq of minority_bigrams
             if (next_words_num == 0) or (next_word == '<\s>') or (
-                count > 20):  # count > average length sentences_count/sen_len
+                        count > median_sen_len):  # count > average length sentences_count/sen_len
                 generated_sen += ' <\s>'  # majority num or median
                 break
             generated_sen += ' ' + next_word
             count += 1
         generated_sens.append(generated_sen)
+        # print(generated_sen)
+        if c > k:
+            break
+        if c % 1000 == 0:
+            print(c)
+        c += 1
         # print (generated_sen)
+    logging.info('end ' + str(datetime.now()).replace(':', '-'))
 
     return generated_sens
 
+
+
+def ovs_minority_text_1(texts, minority_texts, k, n=3,
+                      stop_words_file='dataset/stopwords.txt'):
+    """
+        simple generate positive samples by traditional language model until meet </s>
+        things to try:
+            3-gram generation
+
+    :param texts: already cutted sentences
+    :param minority_texts: LabeledSen list
+    :param n: n=2 stands for unigram, bigram; try trigram
+    :param k: how many sentences to generate, k= num*len(minority_text)
+    :return: generate sentences
+    """
+
+    logging.info('Attempt to generate {} sentences'.format(k))
+    # build bigram indexes for all sentences
+    trigrams_dict = {}
+    unigram_dict = {}
+    idf_dict = {}
+    for text in texts:
+        text = '<s> ' + text + ' </s>'
+        word_list = text.split(' ')
+        indexes_len = len(word_list)
+        tmp = set()
+        for pos in range(indexes_len):
+            if pos >= indexes_len-2:
+                word = word_list[pos]
+                unigram_dict[word] = unigram_dict.get(word, 0) + 1
+                if (len(tmp) == 0) or ((len(tmp) != 0) and (word not in tmp)):
+                    idf_dict[word] = idf_dict.get(word, 0) + 1  # idf value from all sentence
+            else:
+                key = (word_list[pos], word_list[pos + 1], word_list[pos + 2])
+                trigrams_dict[key] = trigrams_dict.get(key, 0) + 1
+                if (pos != 0):
+                    word = word_list[pos]
+                    unigram_dict[word] = unigram_dict.get(word, 0) + 1
+                    if (len(tmp) == 0) or ((len(tmp) != 0) and (word not in tmp)):
+                        idf_dict[word] = idf_dict.get(word, 0) + 1  # idf value from all sentence
+
+    sen_len = len(texts)
+    tf_idf_rs = []
+    minority_bigrams_dict = {}
+    sentences_count = []
+    for text in minority_texts:
+        print (text)
+        word_list = text.split(' ')
+        indexes_len = len(word_list)
+        sentences_count.append(indexes_len)
+        rs = []
+        for word in set(word_list):
+            rs.append((word, (word_list.count(word) / indexes_len) * np.log(sen_len / idf_dict[word])))
+        tf_idf_rs.append(rs)
+        for pos in range(indexes_len - 2):
+            key = (word_list[pos], word_list[pos + 1], word_list[pos + 2])
+            minority_bigrams_dict[key] = minority_bigrams_dict.get(key, 0) + 1  # minority_bigrams_dict
+
+
+    # calculate tf-idf of every words; how a word affect a sentence
+    logging.info('len of bigram dict: {}'.format(len(trigrams_dict)))
+    logging.info('len of minority bigram dict: {}'.format(len(minority_bigrams_dict)))
+    logging.info('len of unigram dict: {}'.format(len(unigram_dict)))
+
+    tf_idf_each_sentence, start_words = [], []
+    for word_tf_idf in tf_idf_rs:
+        tf_idf_sorted = sorted(word_tf_idf, key=lambda x: x[1], reverse=True)
+        start_words += tf_idf_sorted[:3]
+
+    # choose big tf-idf words for each minority sentences as the begin when generating sentenece
+    # try: subsample k words from start_words
+    median_sen_len = np.median(sentences_count)
+    logging.info(
+        'generating minority sentences with len {}, from {} start words.'.format(median_sen_len, len(start_words)))
+    generated_sens = []
+    random.shuffle(start_words)
+    logging.info('start ' + str(datetime.now()).replace(':', '-'))
+    for c, word in enumerate(start_words):
+        generated_sen = '' + word[0]
+        count = 0
+        next_word = word[0]
+        while (1):
+            next_words = [(key,value) for key, value in minority_bigrams_dict.items() if key[0] == next_word]
+            next_words_keys = [key[2] for key, value in next_words]
+            next_words_value = [value for key, value in next_words]
+            deno=sum(next_words_value)
+            next_words_freq = [value/deno for value in next_words_value]
+            next_words_num = len(next_words_keys)
+            if next_words_num != 0:
+                next_word = np.random.choice(next_words_keys, p=next_words_freq) # condition with freq of minority_bigrams
+            if (next_words_num == 0) or (next_word == '<\s>') or (
+                        count > median_sen_len):  # count > average length sentences_count/sen_len
+                generated_sen += ' <\s>'  # majority num or median
+                break
+            generated_sen += ' ' + next_word
+            count += 1
+        generated_sens.append(generated_sen)
+        print(generated_sen)
+        if c > k:
+            break
+        if c % 1000 == 0:
+            print(c)
+        c += 1
+        # print (generated_sen)
+    logging.info('end ' + str(datetime.now()).replace(':', '-'))
+
+    return generated_sens
+
+
+def smote_to_go(X, Y, ration='minority', k_neighbors=3):
+
+    from imblearn.over_sampling import SMOTE
+    sm = SMOTE(ratio=ration,
+               random_state=42,
+               k_neighbors=k_neighbors,
+               kind='regular',  # svm regular
+               n_jobs=3)
+    X_res, y_res = sm.fit_sample(X, Y)
+
+    return X_res, y_res
 
 if __name__ == '__main__':
 
@@ -464,4 +576,9 @@ if __name__ == '__main__':
 
     assert len(train_data_1 + train_data_0) == len(train_texts)
 
-    ovs_minority_text(train_data_1 + train_data_0, train_data_1, word2index, None, 2)
+    gt = ovs_minority_text_1(train_data_1 + train_data_0, train_data_1, len(train_data_1), n=2, stop_words_file='')
+    print('start writing')
+    f = open('dataset/digital forum comments/gt/ovs_minority.txt', 'w')
+    for i in gt:
+        f.write(str(i) + '\n')
+    f.close()

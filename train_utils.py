@@ -4,18 +4,17 @@
 import logging
 import os
 from datetime import datetime
-
-# from itertools import tee
 import jieba
 import numpy as np
 import tensorflow as tf
+# from itertools import tee
 
 import utils
 from doc2vec_model import doc2vec_model
 
 logging.getLogger().setLevel(logging.INFO)
 jieba.load_userdict('dataset/digital forum comments/digital_selfdict.txt')
-
+# jieba.load_userdict('dataset/car forum comments/carSelfDict.txt')
 
 def train(model_type,
           word2index,
@@ -33,9 +32,9 @@ def train(model_type,
           learning_rate,
           eplison,
           tolerance,
+          model_info,
           logdir='logs/tmp'):
-    timestamp = str(datetime.now()).replace(':', '-')
-    logdir = logdir + '_' + timestamp
+
     graph = tf.Graph()  # tf.device('/gpu:0'),
     with tf.device('/gpu:0'), graph.as_default():
 
@@ -44,7 +43,7 @@ def train(model_type,
         # num_of_batches_total = sum(1 for _ in train_batches_gen[0])
         n_steps = num_of_batches_total
         sample_len = num_of_batches_total * batch_size
-        num_of_steps_per_epoch = num_of_batches_total // n_epochs + 1
+        num_of_steps_per_epoch = num_of_batches_total // n_epochs
         logging.info('{} LabeledSentences_train sentences.'.format(document_size))
         logging.info('{} samples.'.format(sample_len))
         logging.info('{} steps to go. '.format(n_steps))
@@ -67,9 +66,8 @@ def train(model_type,
                               n_epochs=n_epochs,
                               logdir=logdir)
         #
-
         out_dir = os.path.abspath(
-            os.path.join(os.path.curdir, "model/trained_model_" + model_type + '_' + timestamp))
+            os.path.join(os.path.curdir, "model/trained_model_" + model_type + '_' + model_info))
 
         checkpoint_dir = os.path.abspath(os.path.join(out_dir, "checkpoints"))
         checkpoint_prefix = os.path.join(checkpoint_dir, "model")
@@ -205,6 +203,7 @@ def infer(checkpoint_dir_pvdm,
           eplison,
           tolerance,
           n_epochs,
+          model_info,
           logdir=None):
     """
     create two fake model for infer. During inferring restore trained weights, biases, word_embeddings, and
@@ -234,7 +233,7 @@ def infer(checkpoint_dir_pvdm,
     num_of_batches_total = len(new_train_batches_pvdbow)
     n_steps = num_of_batches_total
     sample_len = num_of_batches_total * batch_size
-    num_of_steps_per_epoch = num_of_batches_total // n_epochs + 1
+    num_of_steps_per_epoch = num_of_batches_total // n_epochs
     logging.info(str(datetime.now()).replace(':', '-') + '  Start infering pvdbow. ')
     logging.info('[infer pvdbow] {} new LabeledSentences_train_pvdbow sentences.'.format(document_size))
     logging.info('[infer pvdbow] {} samples.'.format(sample_len))
@@ -262,6 +261,7 @@ def infer(checkpoint_dir_pvdm,
                                                word2index=word2index,
                                                trained_texts=trained_texts,
                                                infer_texts=infer_texts,
+                                               model_info=model_info,
                                                new_train_batches=new_train_batches_pvdbow)
 
     # pvdm infer
@@ -273,7 +273,7 @@ def infer(checkpoint_dir_pvdm,
     num_of_batches_total = len(new_train_batches_pvdm)
     n_steps = num_of_batches_total
     sample_len = num_of_batches_total * batch_size
-    num_of_steps_per_epoch = num_of_batches_total // n_epochs + 1
+    num_of_steps_per_epoch = num_of_batches_total // n_epochs
     logging.info(str(datetime.now()).replace(':', '-') + '  Start infering pvdm. ')
     logging.info('[infer pvdm] {} new LabeledSentences_train-pvdm sentences.'.format(document_size))
     logging.info('[infer pvdm] {} samples.'.format(sample_len))
@@ -300,10 +300,45 @@ def infer(checkpoint_dir_pvdm,
                                            index2word=index2word,
                                            trained_texts=trained_texts,
                                            infer_texts=infer_texts,
+                                           model_info=model_info,
                                            new_train_batches=new_train_batches_pvdm)
 
     assert new_doc_start_index_pvdbow == new_doc_start_index_pvdm
     assert new_doc_embeddings_pvdm.shape == new_doc_embeddings_pvdbow.shape
-
+    # dm vec in the front
     return np.concatenate((new_doc_embeddings_pvdm[new_doc_start_index_pvdm:],
                            new_doc_embeddings_pvdbow[new_doc_start_index_pvdbow:]), axis=1)
+
+
+def evaluate_analysis(x, y, y_pred, thresold, path):
+    """
+    :param x:
+    :param y:
+    :param y_pred:
+    :param thresold:
+    :param path: path of result out folder
+    :return:
+    """
+    # assert y.shape == y_pred.shape
+    logging.info('writing error analysis result to ' + path)
+    from sklearn.metrics import classification_report
+    y_predHat = [1 if i > thresold else 0 for i in y_pred]
+    classification_report(y, y_predHat)
+    f = open(path, 'w', encoding='utf-8')
+
+    tmp = []
+    f.write('ix\t' + 'real\t' + 'pred\t' + 'text\n')
+    for ix in range(len(y_pred)):
+        y_pred_single = 1 if y_pred[ix] > thresold  else 0
+        if y_pred_single != y[ix]:  # write error first
+            f.write(str(ix + 1) + '\t' + str(y[ix]) + '\t' +
+                    str(y_pred[ix]) + '\t' + str(x[ix]) + '\n')
+        tmp.append(str(ix + 1) + '\t' + str(y[ix]) + '\t' +
+                   str(y_pred[ix]) + '\t' + str(x[ix]) + '\n')
+    f.write('-----------------------ALL RESULT------------------------')
+    for text in tmp:
+        f.write(text)
+
+    f.close()
+
+
