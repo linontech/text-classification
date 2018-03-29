@@ -1,5 +1,8 @@
-#### implementation of "2014_Distributed Representations of Sentences and Documents_Thomas_Mikolov" using tensorflow
-
+#### Text Representations
+------
+###### implementation of "2014_Distributed Representations of Sentences and Documents_Thomas_Mikolov" using tensorflow
+###### ~ implementation of "Bag of Tricks for Efﬁcient Text Classiﬁcation_facebook_Mikolov"
+###### ~ implementation of "Efficient Vector Representation for Documents through Corruption_Minmin_2017"
 ------
 
 this repository contains implementation of PV-DM, PV-DBoW models, including inferencing new paragraph/sentence, using tensorflow framwork.
