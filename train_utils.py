@@ -4,21 +4,27 @@
 import logging
 import os
 from datetime import datetime
+
 import jieba
 import numpy as np
 import tensorflow as tf
-# from itertools import tee
 
 import utils
 from doc2vec_model import doc2vec_model
 
+# from itertools import tee
+
 logging.getLogger().setLevel(logging.INFO)
 jieba.load_userdict('dataset/digital forum comments/digital_selfdict.txt')
+
+
 # jieba.load_userdict('dataset/car forum comments/carSelfDict.txt')
 
 def train(model_type,
           word2index,
           index2word,
+          word2vec_dict,
+          use_pretrained_word_embeddings,
           train_texts,
           train_batches,
           vocabulary_size,
@@ -56,6 +62,7 @@ def train(model_type,
                               embedding_size_d=embedding_size_d,
                               batch_size=batch_size,
                               learning_rate=learning_rate,
+                              use_pretrained_word_embeddings=use_pretrained_word_embeddings,
                               vocabulary_size=vocabulary_size,
                               document_size=document_size,
                               eval_every_epochs=eval_every_epochs,
@@ -93,10 +100,14 @@ def train(model_type,
         session_conf = tf.ConfigProto(allow_soft_placement=True,
                                       log_device_placement=False)
         session_conf.gpu_options.allow_growth = True
+        session_conf.gpu_options.allocator_type = 'BFC'
         logging.info(str(datetime.now()).replace(':', '-') + '  Start training. ')
         with tf.Session(config=session_conf).as_default() as sess:
 
             sess.run(tf.global_variables_initializer())
+            if model.use_pretrained_word_embeddings:
+                assign_pretrained_word_embedding(sess, word2vec_dict, index2word, embedding_size_w, model)
+
             for train_batch in train_batches:
                 x_train_batch, y_train_batch = zip(*train_batch)
                 loss = train_step(x_train_batch, y_train_batch)
@@ -165,7 +176,7 @@ def train(model_type,
 
 def get_embeddings(checkpoint_dir, model_type):
     checkpoint_file = tf.train.latest_checkpoint(checkpoint_dir)
-    logging.info( '[get embedding ' + model_type + '] Loaded the trained model: {}'.format(checkpoint_file))
+    logging.info('[get embedding ' + model_type + '] Loaded the trained model: {}'.format(checkpoint_file))
     graph = tf.Graph()
     with graph.as_default():
         session_conf = tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)
@@ -310,6 +321,46 @@ def infer(checkpoint_dir_pvdm,
                            new_doc_embeddings_pvdbow[new_doc_start_index_pvdbow:]), axis=1)
 
 
+def assign_pretrained_word_embedding(sess, word2vec_dict, index2word, embed_size, doc2vec_model):
+    """
+    :param sess:
+    :param index2word:
+    :param embed_size:
+    :param vocab_size:
+    :param textCNN:
+    :param word2vec_model_path:
+    :return:
+    """
+    vocab_size = len(index2word)
+    word_embedding_2dlist = [[]] * vocab_size  # create an empty word_embedding list.
+    word_embedding_2dlist[0] = np.zeros(embed_size)  # assign empty for first word:'PAD'
+    bound = np.sqrt(6.0) / np.sqrt(vocab_size)  # bound for random variables.
+    count_exist = 0
+    count_not_exist = 0
+    for i in range(0, vocab_size):  # loop each word
+        word = index2word[i]  # get a word
+        embedding = None
+        try:
+            embedding = word2vec_dict[word]  # try to get vector:it is an array.
+        except Exception:
+            embedding = None
+        if embedding is not None:  # the 'word' exist a embedding
+            word_embedding_2dlist[i] = embedding
+            count_exist = count_exist + 1  # assign array to this word.
+        else:  # no embedding for this word
+            word_embedding_2dlist[i] = np.random.uniform(-bound, bound, embed_size)
+            count_not_exist = count_not_exist + 1  # init a random value for the word.
+
+    word_embedding_final = np.array(word_embedding_2dlist)  # covert to 2d array.
+    word_embedding = tf.constant(word_embedding_final, dtype=tf.float32)  # convert to tensor
+    # print (word_embedding_final)
+    t_assign_embedding = tf.assign(doc2vec_model.word_embeddings,
+                                   word_embedding)  # assign this value to our embedding variables of our model.
+    sess.run(t_assign_embedding)
+    logging.info("word exists embedding: {}, word not exist embedding: {}".format(count_exist, count_not_exist))
+    logging.info("using pre-trained word emebedding ended.")
+
+
 def evaluate_analysis(x, y, y_pred, thresold, path):
     """
     :param x:
@@ -340,5 +391,3 @@ def evaluate_analysis(x, y, y_pred, thresold, path):
         f.write(text)
 
     f.close()
-
-
