@@ -14,7 +14,7 @@ this repository contains implementation of PV-DM, PV-DBoW models, including infe
 
    ( recommend [Google Colab](https://colab.research.google.com) with free 12-hour GPU, Tesla K80, [tutorial](https://medium.com/deep-learning-turkey/google-colab-free-gpu-tutorial-e113627b9f5d) here )
 
-   my .ipynb online: https://drive.google.com/file/d/1WPWM103comn-1kyGv5FXGO-ZC2Lt7ChH/view?usp=sharing
+   ( my .ipynb online: https://drive.google.com/file/d/1WPWM103comn-1kyGv5FXGO-ZC2Lt7ChH/view?usp=sharing )
 
 - 8GB memory, with Nvidia GeForce MX150, compute capability: 6.1
 - python3.5
@@ -24,10 +24,17 @@ this repository contains implementation of PV-DM, PV-DBoW models, including infe
 - t-SNE
 
 ------
-#### references:
->  (1) [distributed-representations-of-words-and-phrases-and-their-compositionality_Mikolov_2013](https://arxiv.org/abs/1310.4546.pdf)
->  (2) [Distributed Representations of Sentences and Documents_Thomas_Mikolov_2014](https://arxiv.org/pdf/1405.4053.pdf)
->  (3) [Bag of Tricks for Efﬁcient Text Classiﬁcation_facebook_Mikolov_2015](https://arxiv.org/pdf/1607.01759.pdf)
->  (4) [Skip-Thought Vectors_2015](https://arxiv.org/pdf/1506.06726.pdf)
->  (5) [An Empirical Evaluation of doc2vec with practical insights into document embedding generation_ibm_research_2016](https://arxiv.org/pdf/1607.05368.pdf)
->  (6) [Efficient Vector Representation for Documents through Corruption_Minmin_2017](https://arxiv.org/pdf/1707.02377.pdf)
+
+(1) [distributed-representations-of-words-and-phrases-and-their-compositionality_Mikolov_2013](https://arxiv.org/abs/1310.4546.pdf)
+
+(2) [Distributed Representations of Sentences and Documents_Thomas_Mikolov_2014](https://arxiv.org/pdf/1405.4053.pdf)
+
+(3) [Bag of Tricks for Efﬁcient Text Classiﬁcation_facebook_Mikolov_2015](https://arxiv.org/pdf/1607.01759.pdf)
+
+(4) [Skip-Thought Vectors_2015](https://arxiv.org/pdf/1506.06726.pdf)
+
+(5) [An Empirical Evaluation of doc2vec with practical insights into document embedding generation_ibm_research_2016](https://arxiv.org/pdf/1607.05368.pdf)
+
+(6) [Efficient Vector Representation for Documents through Corruption_Minmin_2017](https://arxiv.org/pdf/1707.02377.pdf)
+
+>  
