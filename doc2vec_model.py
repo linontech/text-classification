@@ -23,6 +23,7 @@ class doc2vec_model:
                  embedding_size_w,
                  embedding_size_d,
                  num_neg_samples,
+                 use_pretrained_word_embeddings=False,
                  batch_size=32,
                  window_size=5,
                  learning_rate=0.01,
@@ -49,6 +50,7 @@ class doc2vec_model:
 
         self.embedding_size_w = embedding_size_w
         self.embedding_size_d = embedding_size_d
+        self.use_pretrained_word_embeddings = use_pretrained_word_embeddings  # 1/0
 
         if (self.model_type == 'pvdm'):
             self.init_pvdm()
@@ -64,19 +66,24 @@ class doc2vec_model:
         self.train_labels = tf.placeholder(tf.int32, shape=[self.batch_size, 1])
         self.global_step = tf.Variable(0, name="global_step", trainable=False, dtype=tf.int32)
 
-        doc_embeddings = tf.Variable(  # 初始化embedding参数在 [-1,1] 之间的随机数
+        self.doc_embeddings = tf.Variable(  # 初始化embedding参数在 [-1,1] 之间的随机数
             tf.random_uniform([self.document_size, self.embedding_size_d], -1.0, 1.0), name='doc_embeddings',
             dtype=tf.float32)
 
         # 初始化weights参数为 mean=0, stddev=1/sqrt(embedding_size_d)  的正态分布（高斯分布）
-        # 为什么这里初始化权重矩阵时不像doc_embeddings一样用均匀分布（uniform distribution）？
-        weights = tf.Variable(
+        # the constituent word embeddings of doc embeddings; the output word vectors in pvdbow
+        # in IBM research paper, 2016, using a pretrained word embeddings as initialising here helps building the
+        #    doc embeddings, better than randomly initialising. the paper says "with a pretrained word embeddings, it
+        #    become more easily for doc embeddings to be close to its more critical content words."
+        # changing name "weights" to "output_wordvectors"; also need a "assign" method here
+        self.weights = tf.Variable(
             tf.truncated_normal([self.document_size, self.embedding_size_d],
-                                stddev=1.0 / math.sqrt(self.embedding_size_d)), name='weights', dtype=tf.float32)
+                                stddev=1.0 / math.sqrt(self.embedding_size_d)), name='output_wordvectors', dtype=tf.float32)
 
-        biases = tf.Variable(tf.zeros([self.document_size]), name='biases', dtype=tf.float32)
+        self.word_embeddings = self.weights # add nickname here for not using same method "assign_pretrained_word_embedding"
+        self.biases = tf.Variable(tf.zeros([self.document_size]), name='biases', dtype=tf.float32)
 
-        embed_d = tf.nn.embedding_lookup(doc_embeddings, self.train_dataset[:, 0])
+        embed_d = tf.nn.embedding_lookup(self.doc_embeddings, self.train_dataset[:, 0])
 
         self.lr = tf.train.exponential_decay(self.learning_rate,
                                              global_step=self.global_step,
@@ -88,8 +95,8 @@ class doc2vec_model:
         # reduce_mean() 计算batch中所有样本的loss的平均值
         # 在计算test_loss的时候不考虑negative sampling，因为负采样只能够增加训练速度，而会少估计真实的损失，
         self.loss = tf.reduce_mean(
-            tf.nn.nce_loss(weights=weights,
-                           biases=biases,
+            tf.nn.nce_loss(weights=self.weights,
+                           biases=self.biases,
                            labels=self.train_labels,
                            inputs=embed_d,
                            num_sampled=self.num_neg_samples,
@@ -104,8 +111,9 @@ class doc2vec_model:
         # 在机器学习算法的预处理阶段，归一化是一个重要步骤。例如在训练 svm 等线性模型时。一般的，推荐将每个属性缩放
         # 到 [-1,1]; [0,1]。
         # 这里使得每个向量各自的加总合为1。
-        self.normalized_doc_embeddings = tf.div(doc_embeddings,
-                                                tf.sqrt(tf.reduce_sum(tf.square(doc_embeddings), 1, keep_dims=True)),
+        self.normalized_doc_embeddings = tf.div(self.doc_embeddings,
+                                                tf.sqrt(
+                                                    tf.reduce_sum(tf.square(self.doc_embeddings), 1, keep_dims=True)),
                                                 name='doc_embeddings_norm')
 
     def init_pvdm(self, average=0):
@@ -114,26 +122,26 @@ class doc2vec_model:
         self.train_labels = tf.placeholder(tf.int32, shape=[self.batch_size, 1])
         self.global_step = tf.Variable(0, name="global_step", trainable=False, dtype=tf.int32)
 
-        word_embeddings = tf.Variable(  # 初始化embedding参数
+        self.word_embeddings = tf.Variable(  # 初始化embedding参数
             tf.random_uniform([self.vocabulary_size, self.embedding_size_w], -1.0, 1.0), name='word_embeddings',
             dtype=tf.float32)
-        doc_embeddings = tf.Variable(
+        self.doc_embeddings = tf.Variable(
             tf.random_uniform([self.document_size, self.embedding_size_d], -1.0, 1.0), name='doc_embeddings',
             dtype=tf.float32)
 
         combined_embed_vector_length = self.embedding_size_w * (self.window_size - 1) + self.embedding_size_d
 
-        weights = tf.Variable(tf.truncated_normal([self.vocabulary_size, combined_embed_vector_length],  # 初始化weights参数
+        self.weights = tf.Variable(tf.truncated_normal([self.vocabulary_size, combined_embed_vector_length],  # 初始化weights参数
                                                   stddev=1.0 / math.sqrt(combined_embed_vector_length)), name='weights',
                               dtype=tf.float32)
 
-        biases = tf.Variable(tf.zeros([self.vocabulary_size]), name='biases', dtype=tf.float32)
+        self.biases = tf.Variable(tf.zeros([self.vocabulary_size]), name='biases', dtype=tf.float32)
 
         embed = []
-        embed_d = tf.nn.embedding_lookup(doc_embeddings, self.train_dataset[:, 0])
+        embed_d = tf.nn.embedding_lookup(self.doc_embeddings, self.train_dataset[:, 0])
         embed.append(embed_d)
         for j in range(1, self.window_size):
-            embed_w = tf.nn.embedding_lookup(word_embeddings, self.train_dataset[:, j])
+            embed_w = tf.nn.embedding_lookup(self.word_embeddings, self.train_dataset[:, j])
             embed.append(embed_w)
 
         if not average:
@@ -149,8 +157,8 @@ class doc2vec_model:
                                              staircase=True)
 
         self.loss = tf.reduce_mean(
-            tf.nn.nce_loss(weights=weights,
-                           biases=biases,
+            tf.nn.nce_loss(weights=self.weights,
+                           biases=self.biases,
                            labels=self.train_labels,
                            inputs=embed,
                            num_sampled=self.num_neg_samples,
@@ -159,11 +167,13 @@ class doc2vec_model:
         # grads_and_vars = optimizer.compute_gradients(self.loss)
         # self.train_op = optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
 
-        self.normalized_word_embeddings = tf.div(word_embeddings,
-                                                 tf.sqrt(tf.reduce_sum(tf.square(word_embeddings), 1, keep_dims=True)),
+        self.normalized_word_embeddings = tf.div(self.word_embeddings,
+                                                 tf.sqrt(
+                                                     tf.reduce_sum(tf.square(self.word_embeddings), 1, keep_dims=True)),
                                                  name='word_embeddings_norm')
-        self.normalized_doc_embeddings = tf.div(doc_embeddings,
-                                                tf.sqrt(tf.reduce_sum(tf.square(doc_embeddings), 1, keep_dims=True)),
+        self.normalized_doc_embeddings = tf.div(self.doc_embeddings,
+                                                tf.sqrt(
+                                                    tf.reduce_sum(tf.square(self.doc_embeddings), 1, keep_dims=True)),
                                                 name='doc_embeddings_norm')
 
     def infer_vector_pvdm(self,
@@ -172,7 +182,8 @@ class doc2vec_model:
                           index2word,
                           word2index,
                           infer_texts,
-                          trained_texts):
+                          trained_texts,
+                          model_info):
         """
         #
         :return:
@@ -229,7 +240,8 @@ class doc2vec_model:
             assign_biases = tf.assign(biases, old_biases)
 
             embed = []
-            embed_d = tf.nn.embedding_lookup(self.concat_doc_embeddings, new_doc_start_index + self.predict_dataset[:, 0])
+            embed_d = tf.nn.embedding_lookup(self.concat_doc_embeddings,
+                                             new_doc_start_index + self.predict_dataset[:, 0])
             embed.append(embed_d)
             for j in range(1, self.window_size):
                 embed_w = tf.nn.embedding_lookup(word_embeddings, self.predict_dataset[:, j])
@@ -263,7 +275,7 @@ class doc2vec_model:
             init = tf.global_variables_initializer()
             saver = tf.train.Saver(tf.global_variables())
 
-        #
+            #
             session_conf = tf.ConfigProto(allow_soft_placement=True,
                                           log_device_placement=False,
                                           gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.5))
@@ -271,7 +283,7 @@ class doc2vec_model:
 
             out_dir = os.path.abspath(
                 os.path.join(os.path.curdir,
-                             "model/retrained_infer_model_pvdm" + '_' + str(datetime.now()).replace(':', '-')))
+                             "model/retrained_infer_model_pvdm" + '_' + model_info))
             checkpoint_dir = os.path.abspath(os.path.join(out_dir, "checkpoints"))
             checkpoint_prefix = os.path.join(checkpoint_dir, "model")
 
@@ -309,22 +321,25 @@ class doc2vec_model:
                     if (current_step % self.num_of_steps_per_epoch == 0) and (tolerance > 0):
                         avg_train_loss = total_train_loss / self.num_of_steps_per_epoch
                         logging.info(
-                            '[infer_vector_pvdm] Current epoch: {}, avg loss on train set: {}'.format(current_epoch, avg_train_loss))
+                            '[infer_vector_pvdm] Current epoch: {}, avg loss on train set: {}'.format(current_epoch,
+                                                                                                      avg_train_loss))
 
                         if best_train_avg_loss - avg_train_loss > self.eplison:
                             best_train_avg_loss, best_at_step = avg_train_loss, current_step
                         else:
                             tolerance -= 1
                             logging.info(
-                                '[infer_vector_pvdm] {} tolerance left, best avg train loss: {} at epoch {}.'.format(tolerance,
-                                                                                                 best_train_avg_loss,
-                                                                                                 current_epoch))
+                                '[infer_vector_pvdm] {} tolerance left, best avg train loss: {} at epoch {}.'.format(
+                                    tolerance,
+                                    best_train_avg_loss,
+                                    current_epoch))
 
                         if (current_epoch % self.eval_every_epochs == 0) or (tolerance == 0) or (
                                     current_epoch == self.n_epochs):
 
                             logging.info('+++++++++++++++++++++++++++++++++++eval+++++++++++++++++++++++++++++++++')
-                            sim_matric_argmax_ix = self.calSimilarity_infer(sess, new_doc_start_index, k=10)  # 计算相似度，LabeledSentences_train前十个句子
+                            sim_matric_argmax_ix = self.calSimilarity_infer(sess, new_doc_start_index,
+                                                                            k=10)  # 计算相似度，LabeledSentences_train前十个句子
                             oneToTen_ix = range(10)
 
                             assert len(oneToTen_ix) == len(sim_matric_argmax_ix)
@@ -335,8 +350,9 @@ class doc2vec_model:
                                 logging.info(
                                     infer_texts[t] + '\n'
                                     + ' \t\t\t'
-                                    + ' '.join(utils.ids2words(index2word, utils.words2ids(word2index, infer_texts[t].split(
-                                        ' ')))) + '\n'
+                                    + ' '.join(
+                                        utils.ids2words(index2word, utils.words2ids(word2index, infer_texts[t].split(
+                                            ' ')))) + '\n'
                                     + ' \t\t\t'
                                     + trained_texts[sim_t] + '\n'
                                     + ' \t\t\t'
@@ -349,10 +365,12 @@ class doc2vec_model:
                             if (tolerance == 0) or (current_epoch == self.n_epochs):
                                 path = saver.save(sess, checkpoint_prefix, global_step=current_step)
                                 logging.info(
-                                    '[infer_vector_pvdm] {} tolerance left. Saved model at {} at step {}'.format(tolerance, path,
-                                                                                             best_at_step))
+                                    '[infer_vector_pvdm] {} tolerance left. Saved model at {} at step {}'.format(
+                                        tolerance, path,
+                                        best_at_step))
                                 logging.info(
-                                    '[infer_vector_pvdm] Best avg loss on train is {} at step {}'.format(best_train_avg_loss, best_at_step))
+                                    '[infer_vector_pvdm] Best avg loss on train is {} at step {}'.format(
+                                        best_train_avg_loss, best_at_step))
                                 break
 
                         total_train_loss = 0
@@ -361,8 +379,8 @@ class doc2vec_model:
                 retrained_doc_embeddings = sess.run(self.normalized_doc_embeddings)
 
         logging.info('[infer_vector_pvdm] ' +
-            str(datetime.now()).replace(':', '-') + '  retraining completed. {} tolerances used. '.format(
-                self.tolerance - tolerance))
+                     str(datetime.now()).replace(':', '-') + '  retraining completed. {} tolerances used. '.format(
+            self.tolerance - tolerance))
 
         return retrained_doc_embeddings, new_doc_start_index
 
@@ -372,7 +390,8 @@ class doc2vec_model:
                             index2word,
                             infer_texts,
                             trained_texts,
-                            word2index):
+                            word2index,
+                            model_info):
         """
         while training in order to evaluate the similarity performance, every 20 epoches calulate the similarity
         between the first 10 sentences in new added sentnece between old use-to-train sentences.
@@ -454,7 +473,7 @@ class doc2vec_model:
 
             out_dir = os.path.abspath(
                 os.path.join(os.path.curdir,
-                             "model/retrained_infer_model_pvdbow" + '_' + str(datetime.now()).replace(':', '-')))
+                             "model/retrained_infer_model_pvdbow" + '_' + model_info))
             checkpoint_dir = os.path.abspath(os.path.join(out_dir, "checkpoints"))
             checkpoint_prefix = os.path.join(checkpoint_dir, "model")
             if not os.path.exists(checkpoint_dir):
@@ -491,16 +510,18 @@ class doc2vec_model:
                     if (current_step % self.num_of_steps_per_epoch == 0) and (tolerance > 0):
                         avg_train_loss = total_train_loss / self.num_of_steps_per_epoch
                         logging.info(
-                            '[infer_vector_pvdbow] Current epoch: {}, avg loss on train set: {}'.format(current_epoch, avg_train_loss))
+                            '[infer_vector_pvdbow] Current epoch: {}, avg loss on train set: {}'.format(current_epoch,
+                                                                                                        avg_train_loss))
 
                         if best_train_avg_loss - avg_train_loss > self.eplison:
                             best_train_avg_loss, best_at_step = avg_train_loss, current_step
                         else:
                             tolerance -= 1
                             logging.info(
-                                '[infer_vector_pvdbow] {} tolerance left, best avg train loss: {} at epoch {}.'.format(tolerance,
-                                                                                                 best_train_avg_loss,
-                                                                                                 current_epoch))
+                                '[infer_vector_pvdbow] {} tolerance left, best avg train loss: {} at epoch {}.'.format(
+                                    tolerance,
+                                    best_train_avg_loss,
+                                    current_epoch))
 
                         if (current_epoch % self.eval_every_epochs == 0) or (tolerance == 0) or (
                                     current_epoch == self.n_epochs):
@@ -533,10 +554,12 @@ class doc2vec_model:
                             if (tolerance == 0) or (current_epoch == self.n_epochs):
                                 path = saver.save(sess, checkpoint_prefix, global_step=current_step)
                                 logging.info(
-                                    '[infer_vector_pvdbow] {} tolerance left. Saved model at {} at step {}'.format(tolerance, path,
-                                                                                             best_at_step))
+                                    '[infer_vector_pvdbow] {} tolerance left. Saved model at {} at step {}'.format(
+                                        tolerance, path,
+                                        best_at_step))
                                 logging.info(
-                                    '[infer_vector_pvdbow] Best avg loss on train is {} at step {}'.format(best_train_avg_loss, best_at_step))
+                                    '[infer_vector_pvdbow] Best avg loss on train is {} at step {}'.format(
+                                        best_train_avg_loss, best_at_step))
                                 break
 
                         total_train_loss = 0
