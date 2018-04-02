@@ -77,11 +77,11 @@ class doc2vec_model:
         #    become more easily for doc embeddings to be close to its more critical content words."
         # changing name "weights" to "output_wordvectors"; also need a "assign" method here
         self.weights = tf.Variable(
-            tf.truncated_normal([self.document_size, self.embedding_size_d],
+            tf.truncated_normal([self.vocabulary_size, self.embedding_size_d],
                                 stddev=1.0 / math.sqrt(self.embedding_size_d)), name='output_wordvectors', dtype=tf.float32)
 
         self.word_embeddings = self.weights # add nickname here for not using same method "assign_pretrained_word_embedding"
-        self.biases = tf.Variable(tf.zeros([self.document_size]), name='biases', dtype=tf.float32)
+        self.biases = tf.Variable(tf.zeros([self.vocabulary_size]), name='biases', dtype=tf.float32)
 
         embed_d = tf.nn.embedding_lookup(self.doc_embeddings, self.train_dataset[:, 0])
 
@@ -349,13 +349,13 @@ class doc2vec_model:
                                 logging.info('第{}句话: '.format(i))
                                 logging.info(
                                     infer_texts[t] + '\n'
-                                    + ' \t\t\t'
+                                    + '   \t\t'
                                     + ' '.join(
                                         utils.ids2words(index2word, utils.words2ids(word2index, infer_texts[t].split(
                                             ' ')))) + '\n'
-                                    + ' \t\t\t'
+                                    + '   \t\t'
                                     + trained_texts[sim_t] + '\n'
-                                    + ' \t\t\t'
+                                    + '   \t\t'
                                     + ' '.join(utils.ids2words(index2word,
                                                                utils.words2ids(word2index,
                                                                                trained_texts[sim_t].split(' ')))))
@@ -538,13 +538,13 @@ class doc2vec_model:
                                 logging.info('第{}句话: '.format(i))
                                 logging.info(
                                     infer_texts[t] + '\n'
-                                    + ' \t\t\t'
+                                    + '   \t\t'
                                     + ' '.join(utils.ids2words(index2word, utils.words2ids(word2index,
                                                                                            infer_texts[t].split(
                                                                                                ' ')))) + '\n'
-                                    + ' \t\t\t'
+                                    + '   \t\t'
                                     + trained_texts[sim_t] + '\n'
-                                    + ' \t\t\t'
+                                    + '   \t\t'
                                     + ' '.join(utils.ids2words(index2word, utils.words2ids(word2index,
                                                                                            trained_texts[sim_t].split(
                                                                                                ' ')))))
