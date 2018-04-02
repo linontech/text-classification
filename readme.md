@@ -16,6 +16,8 @@ this repository contains implementation of PV-DM, PV-DBoW models, including infe
 
    ( my .ipynb online: https://drive.google.com/file/d/1WPWM103comn-1kyGv5FXGO-ZC2Lt7ChH/view?usp=sharing )
 
+   ( most GPU version tutorial on these shallow neural networks(including mine) are slower than a CPU version (eg. gensim) implementation except for an [adjustment](https://github.com/phunterlau/word2vec_cbow) on CUDA )
+
 - 8GB memory, with Nvidia GeForce MX150, compute capability: 6.1
 - python3.5
 - tensorflow-gpu 1.4.0
