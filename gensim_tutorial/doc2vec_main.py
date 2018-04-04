@@ -65,7 +65,8 @@ for epoch in range(1, epoches + 1):
     text_gens = {}
     for file in files:  # generate train, dev text sets' generators in shuffled order
         # print(file)  # check you know the generators' order; filename=labelname
-        text_gens[file.split('.')[0]] = load_data_without_store_ixs_labeled(path + file)
+        class_name=file.split('.')[0]
+        text_gens[class_name] = load_data_without_store_ixs_labeled(path + file, classes_num[class_name])
 
     train_gen = [next(text_gens[c]) for c in classes_num.keys() for _ in range(train_lens[c])]
     dev_gen = [next(text_gens[c]) for c in classes_num.keys() for _ in range(dev_lens[c])]
