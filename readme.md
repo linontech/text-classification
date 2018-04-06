@@ -27,16 +27,34 @@ this repository contains implementation of PV-DM, PV-DBoW models, including infe
 
 ------
 
-(1) [distributed-representations-of-words-and-phrases-and-their-compositionality_Mikolov_2013](https://arxiv.org/abs/1310.4546.pdf)
+reference
 
-(2) [Distributed Representations of Sentences and Documents_Thomas_Mikolov_2014](https://arxiv.org/pdf/1405.4053.pdf)
+-  [distributed-representations-of-words-and-phrases-and-their-compositionality_Mikolov_2013](https://arxiv.org/abs/1310.4546.pdf)
 
-(3) [Bag of Tricks for Efﬁcient Text Classiﬁcation_facebook_Mikolov_2015](https://arxiv.org/pdf/1607.01759.pdf)
+-  [Distributed Representations of Sentences and Documents_Thomas_Mikolov_2014](https://arxiv.org/pdf/1405.4053.pdf)
 
-(4) [Skip-Thought Vectors_2015](https://arxiv.org/pdf/1506.06726.pdf)
+-  [Bag of Tricks for Efﬁcient Text Classiﬁcation_facebook_Mikolov_2015](https://arxiv.org/pdf/1607.01759.pdf)
 
-(5) [An Empirical Evaluation of doc2vec with practical insights into document embedding generation_ibm_research_2016](https://arxiv.org/pdf/1607.05368.pdf)
+-  [Skip-Thought Vectors_2015](https://arxiv.org/pdf/1506.06726.pdf)
 
-(6) [Efficient Vector Representation for Documents through Corruption_Minmin_2017](https://arxiv.org/pdf/1707.02377.pdf)
+-  [An Empirical Evaluation of doc2vec with practical insights into document embedding generation_ibm_research_2016](https://arxiv.org/pdf/1607.05368.pdf)
 
->  
+-  [Enriching Word Vectors with Subword Information](https://arxiv.org/pdf/1607.04606.pdf)
+
+-  [Efficient Vector Representation for Documents through Corruption_Minmin_2017](https://arxiv.org/pdf/1707.02377.pdf)
+
+  ​
+
+---
+
+learning resources
+
+- [Word2Vec源码解析](http://www.cnblogs.com/neopenx/p/4571996.html)   @[Physcalの大魔導書/cnblog](http://www.cnblogs.com/neopenx/)
+
+
+- [google 官方word2vec 中文注释版/tankle](https://github.com/tankle/word2vec)
+- [word2vec/dav](https://github.com/dav/word2vec)
+- [C++ implement of Tomas Mikolov's word/document embedding](https://github.com/hiyijian/doc2vec)
+- [Doc2VecC from the paper "Efficient Vector Representation for Documents through Corruption"/mchen24](https://github.com/mchen24/iclr2017)
+- [Tutorial for Sentiment Analysis using Doc2Vec in gensim/linanqiu](https://github.com/linanqiu/word2vec-sentiments)
+- ["Distributed Representations of Sentences and Documents" Code?/google forum](https://groups.google.com/forum/#!msg/word2vec-toolkit/Q49FIrNOQRo/J6KG8mUj45sJ)
