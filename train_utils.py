@@ -11,13 +11,8 @@ import tensorflow as tf
 
 import utils
 from doc2vec_model import doc2vec_model
-
-# from itertools import tee
-
 logging.getLogger().setLevel(logging.INFO)
-jieba.load_userdict('dataset/digital forum comments/digital_selfdict.txt')
-
-
+# jieba.load_userdict('dataset/digital forum comments/digital_selfdict.txt')
 # jieba.load_userdict('dataset/car forum comments/carSelfDict.txt')
 
 def train(model_type,
@@ -145,12 +140,12 @@ def train(model_type,
                             logging.info('第{}句话: '.format(i))
                             logging.info(
                                 train_texts[t] + '\n'
-                                + ' \t\t\t'
+                                + '   \t\t'
                                 + ' '.join(utils.ids2words(index2word, utils.words2ids(word2index, train_texts[t].split(
                                     ' ')))) + '\n'
-                                + ' \t\t\t'
+                                + '   \t\t'
                                 + train_texts[sim_t] + '\n'
-                                + ' \t\t\t'
+                                + '   \t\t'
                                 + ' '.join(utils.ids2words(index2word,
                                                            utils.words2ids(word2index, train_texts[sim_t].split(' ')))))
                             i += 1
@@ -195,7 +190,7 @@ def get_embeddings(checkpoint_dir, model_type):
     return word_embeddings, doc_embeddings
 
 
-def infer(checkpoint_dir_pvdm,
+def infer_pvbow(
           checkpoint_dir_pvdbow,
           infer_LabeledSentences,
           trained_texts,
@@ -207,7 +202,6 @@ def infer(checkpoint_dir_pvdm,
           eval_every_epochs,
           batch_size,
           window_size,
-          embedding_size_w,
           embedding_size_d,
           learning_rate,
           num_neg_samples,
@@ -220,21 +214,6 @@ def infer(checkpoint_dir_pvdm,
     create two fake model for infer. During inferring restore trained weights, biases, word_embeddings, and
     doc_embeddings. Add more columns to doc_embedding matrix. While training, only gradient descent updating the
     doc_embeddings.
-
-    :param checkpoint_dir_pvdm:
-    :param checkpoint_dir_pvdbow:
-    :param new_LabeledSentences_train:
-    :param train_texts:
-    :param word2index:
-    :param index2word:
-    :param vocabulary_size:
-    :param document_size:
-    :param eval_every_epochs:
-    :param batch_size:
-    :param tolerance:
-    :param n_epochs:
-    :param logdir:
-    :return:
     """
     # pvdbow infer
     new_train_batches_pvdbow = utils.generate_pvdbow_batches(batch_size=batch_size,
@@ -252,7 +231,7 @@ def infer(checkpoint_dir_pvdm,
     logging.info('[infer pvdbow] {} epochs to go. '.format(n_epochs))
 
     model_pvdbow_infer = doc2vec_model(model_type=None,
-                                       embedding_size_w=embedding_size_w,
+                                       embedding_size_w=None,
                                        embedding_size_d=embedding_size_d,
                                        batch_size=batch_size,
                                        learning_rate=learning_rate,
@@ -274,7 +253,28 @@ def infer(checkpoint_dir_pvdm,
                                                infer_texts=infer_texts,
                                                model_info=model_info,
                                                new_train_batches=new_train_batches_pvdbow)
+    return new_doc_embeddings_pvdbow[new_doc_start_index_pvdbow:]    # dm vec in the front
 
+def infer_pvdm(checkpoint_dir_pvdm,
+          infer_LabeledSentences,
+          trained_texts,
+          infer_texts,
+          word2index,
+          index2word,
+          vocabulary_size,
+          document_size,
+          eval_every_epochs,
+          batch_size,
+          window_size,
+          embedding_size_w,
+          embedding_size_d,
+          learning_rate,
+          num_neg_samples,
+          eplison,
+          tolerance,
+          n_epochs,
+          model_info,
+          logdir=None):
     # pvdm infer
     new_train_batches_pvdm = utils.generate_pvdm_batches(batch_size=batch_size,
                                                          window_size=window_size,
@@ -314,22 +314,10 @@ def infer(checkpoint_dir_pvdm,
                                            model_info=model_info,
                                            new_train_batches=new_train_batches_pvdm)
 
-    assert new_doc_start_index_pvdbow == new_doc_start_index_pvdm
-    assert new_doc_embeddings_pvdm.shape == new_doc_embeddings_pvdbow.shape
-    # dm vec in the front
-    return np.concatenate((new_doc_embeddings_pvdm[new_doc_start_index_pvdm:],
-                           new_doc_embeddings_pvdbow[new_doc_start_index_pvdbow:]), axis=1)
-
+    return new_doc_embeddings_pvdm[new_doc_start_index_pvdm:]
 
 def assign_pretrained_word_embedding(sess, word2vec_dict, index2word, embed_size, doc2vec_model):
     """
-    :param sess:
-    :param index2word:
-    :param embed_size:
-    :param vocab_size:
-    :param textCNN:
-    :param word2vec_model_path:
-    :return:
     """
     vocab_size = len(index2word)
     word_embedding_2dlist = [[]] * vocab_size  # create an empty word_embedding list.
@@ -360,17 +348,26 @@ def assign_pretrained_word_embedding(sess, word2vec_dict, index2word, embed_size
     logging.info("word exists embedding: {}, word not exist embedding: {}".format(count_exist, count_not_exist))
     logging.info("using pre-trained word emebedding ended.")
 
+def smote_to_go(X, Y, ration='minority', k_neighbors=3):
+    """
+    use smote algorithm to oversample minority class texts
+    """
+    from imblearn.over_sampling import SMOTE
+    sm = SMOTE(ratio=ration,
+               random_state=42,
+               k_neighbors=k_neighbors,
+               kind='regular',  # svm regular
+               n_jobs=3)
+    X_res, y_res = sm.fit_sample(X, Y)
+
+    return X_res, y_res
+
 
 def evaluate_analysis(x, y, y_pred, thresold, path):
     """
-    :param x:
-    :param y:
-    :param y_pred:
-    :param thresold:
     :param path: path of result out folder
-    :return:
     """
-    # assert y.shape == y_pred.shape
+    assert y.shape == y_pred.shape
     logging.info('writing error analysis result to ' + path)
     from sklearn.metrics import classification_report
     y_predHat = [1 if i > thresold else 0 for i in y_pred]
