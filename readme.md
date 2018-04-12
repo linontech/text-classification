@@ -1,4 +1,4 @@
-#### Text Representations
+#### text classifications
 ------
 this repository contains implementation of PV-DM, PV-DBoW models, including inferencing new paragraph/sentence, using tensorflow framwork. My goal is to learn how to generate good vectors for sentences, paragraphs. Probably a good start point beginners who want to represent texts using neural model.
 
@@ -29,19 +29,20 @@ this repository contains implementation of PV-DM, PV-DBoW models, including infe
 
 reference
 
--  [distributed-representations-of-words-and-phrases-and-their-compositionality_Mikolov_2013](https://arxiv.org/abs/1310.4546.pdf)
+- text representations
+  - [distributed-representations-of-words-and-phrases-and-their-compositionality_Mikolov_2013](https://arxiv.org/abs/1310.4546.pdf)
+  - [Distributed Representations of Sentences and Documents_Thomas_Mikolov_2014](https://arxiv.org/pdf/1405.4053.pdf)
+  - [Bag of Tricks for Efﬁcient Text Classiﬁcation_facebook_Mikolov_2015](https://arxiv.org/pdf/1607.01759.pdf)
+  - [Skip-Thought Vectors_2015](https://arxiv.org/pdf/1506.06726.pdf)
+  - [An Empirical Evaluation of doc2vec with practical insights into document embedding generation_ibm_research_2016](https://arxiv.org/pdf/1607.05368.pdf)
+  - [Enriching Word Vectors with Subword Information](https://arxiv.org/pdf/1607.04606.pdf)
+  - [Efficient Vector Representation for Documents through Corruption_Minmin_2017](https://arxiv.org/pdf/1707.02377.pdf)
 
--  [Distributed Representations of Sentences and Documents_Thomas_Mikolov_2014](https://arxiv.org/pdf/1405.4053.pdf)
+- textcnn
 
--  [Bag of Tricks for Efﬁcient Text Classiﬁcation_facebook_Mikolov_2015](https://arxiv.org/pdf/1607.01759.pdf)
+  - [Convolutional Neural Networks for Sentence Classification](https://arxiv.org/pdf/1408.5882.pdf)
 
--  [Skip-Thought Vectors_2015](https://arxiv.org/pdf/1506.06726.pdf)
-
--  [An Empirical Evaluation of doc2vec with practical insights into document embedding generation_ibm_research_2016](https://arxiv.org/pdf/1607.05368.pdf)
-
--  [Enriching Word Vectors with Subword Information](https://arxiv.org/pdf/1607.04606.pdf)
-
--  [Efficient Vector Representation for Documents through Corruption_Minmin_2017](https://arxiv.org/pdf/1707.02377.pdf)
+- textrnn
 
   ​
 

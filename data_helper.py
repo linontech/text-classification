@@ -18,7 +18,7 @@ import re
 from collections import namedtuple
 import jieba
 import numpy as np
-from boto.cloudfront import logging
+import logging
 logging.getLogger().setLevel(logging.INFO)
 
 
@@ -113,6 +113,7 @@ def load_data_without_store_ixs_labeled(filepath, data_size=350000):
         filesize = f.tell()
         random_set = sorted(random.sample(range(filesize), data_size))
         count = 0
+        split='None'
         for i in range(data_size):
             f.seek(random_set[i])
             f.readline()  # Skip current line (because we might be in the middle of a line)
@@ -126,27 +127,27 @@ def load_data_without_store_ixs_labeled(filepath, data_size=350000):
             tag = [count]
             count += 1
             label = 1 if label == '负面' else 0
-            yield Document(words, tag, int(label))
+            yield Document(words, tag, split, int(label))
 
-def load_data_label(filepath):
+def load_text_label_test(filepath, label_index):
     """
+    for test text
     """
+    Document = namedtuple('Document', 'words tags split label')
     file = open(filepath, encoding='utf-8')
     lines = file.read().split('\n')
     file.close()
-    texts, labels = [], []
+    documents = []
+    split='test'
+    tag_id=0
     for line in lines:
         text = line.split('\t')[0]
         label = line.split('\t')[1]
         text = accept_sentence(text)
-        text = jieba.lcut(''.join(text))
-        texts.append(' '.join(text))
-        if label == '中立':
-            labels.append(0)
-        elif label == '负面':
-            labels.append(1)
-
-    return texts, labels
+        text = ' '.join(jieba.lcut(''.join(text)))
+        documents.append(Document(text,[tag_id],split,label_index[label]))
+        tag_id+=1
+    return documents
 
 def load_data_with_store_ixs(filepath, data_size=350000):
     """
@@ -284,8 +285,6 @@ def generate_texts2indexes(input_data, word2index):
     TODO: add num_skip variables to limit samples generate from one window
          num_skip: 一个窗口最多采样多少样本; prevent overfitting issue
 """
-
-
 def generate_pvdm_batches(LabeledSentences, n_epochs, batch_size, window_size, shuffle=True):
     """
     generate batches for pvdm model.
@@ -312,7 +311,7 @@ def generate_pvdm_batches(LabeledSentences, n_epochs, batch_size, window_size, s
 
     data = np.array(sample_label_s)
     data_size = len(sample_label_s)
-    num_batches_per_epoch = int(data_size / batch_size)  # num_of_step_per_epoch
+    num_batches_per_epoch = int(data_size / batch_size)+1  # num_of_step_per_epoch
 
     batches = []
     for epoch in range(n_epochs):  # batch_iter
@@ -354,7 +353,7 @@ def generate_pvdbow_batches(LabeledSentences, n_epochs, batch_size, window_size,
 
     data = np.array(sample_label_s)
     data_size = len(sample_label_s)
-    num_batches_per_epoch = int(data_size / batch_size)
+    num_batches_per_epoch = int(data_size / batch_size)+1
     batches = []
     for epoch in range(n_epochs):  # batch_iter
         if shuffle:
@@ -394,7 +393,7 @@ def words2ids(word2id, words):
 
     def word_to_id(word):
         id = word2id.get(word)
-        if id is None:  # 如果字典里面没有这个词的情况
+        if id is None:  # 如果字典里面没有这个词的情况，变成_UNK_的index
             id = 0  # '__UNK__’ 的index
         return id
 

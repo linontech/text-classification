@@ -26,6 +26,20 @@ class lr_model:
         :param num_iters:         训练迭代次数，
         :param debug:
         :param normalization:     正则化类型
+
+        e.g
+            lr = lr_model(epsilon=1e-4,
+                          llambda=0.01,
+                          alpha=0.8,
+                          num_iters=8000,
+                          batch_size=embedding.shape[0],  # embedding.shape[0]
+                          tolerance=10,
+                          normalization='l2')
+            learntParameters, final_costs = lr.train(embedding, train_labels, np.unique(train_labels))
+            classifedLabels = lr.classify(test_embeddings)
+            classifedProbs, classifedLabels = zip(*classifedLabels)
+            classifedProbs = np.array(classifedProbs).flatten()
+
         '''
         self.normalization_mode = normalization
         self.debug = debug
@@ -248,7 +262,6 @@ class lr_model:
             for eachTheta in self.Thetas:
                 classification_val = self.sigmoidCalc(np.dot(data, eachTheta))  # 作为第 i 类的概率
                 mvals.append(classification_val)
-
             mvals = np.array(mvals)
             return list(zip(np.max(mvals, 0), np.argmax(mvals, 0)))
 
