@@ -11,12 +11,12 @@
 - evaluations of text representation
 
   - task0: the second experiment as benchmark in Mikolov. etal:2014, using the IMDB dataset.
-  - IMDB (Large Movie Review Dataset) from "Learning Word Vectors for Sentiment Analysis", Maas-EtAl:2011:ACL-HLT2011 
-
-
-  - task1: a positive/negative sentiment classification of titles in digital forum.
-  - task2: similarity calculations between paragraph vector and a label vector.
-  - task3: 300,000 documents and 100 categories, from Minmin, 2017, "Efficient Vector Representation for Documents through Corruption"(Doc2vecC)
+    - IMDB (Large Movie Review Dataset) from "Learning Word Vectors for Sentiment Analysis", Maas-EtAl:2011:ACL-HLT2011 
+      - textrnn and textcnn both perform well on this dataset.
+    - task1: a positive/negative sentiment classification of titles in digital forum.
+        - in my experiment, textrnn with lstm cells(300) is better than textcnn with 128 filters with sizes range [2,5]. This result maybe my texts from these forums are short, and textcnn performs better in a long paragraph classification most of time. 
+    - task3: 300,000 documents and 100 categories, from Minmin, 2017, "Efficient Vector Representation for Documents through Corruption"(Doc2vecC)
+        - the author implements this in c++ based on Mikolov's word2vec. 
 
 ------
 
