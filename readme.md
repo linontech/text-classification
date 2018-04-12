@@ -3,7 +3,7 @@
 ##### # Contains:
 
 1. implementation of PV-DM, PV-DBoW models using tensorflow  structure (including inferencing new paragraph/sentence). My goal is to learn how to generate good vectors for sentences, paragraphs. Probably a good start point beginners who want to represent texts using neural model.
-2. text_cnn, text_rnn model implementations referenced from [brightmart/text_classification](brightmart/text_classification) with my personal comments.
+2. text_cnn, text_rnn model implementations referenced from [brightmart/text_classification](https://github.com/brightmart/text_classification) with my personal comments.
 3. fasttext tutorial
 
 ##### # todo
